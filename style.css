@@ -1,0 +1,62 @@
+.calendar-grid {
+  display: grid;
+  /* Dynamically set columns based on days + 1 for time column */
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+  gap: 1px;
+  overflow-x: auto;
+  position: relative;
+  border-collapse: collapse;
+}
+.time-column {
+    grid-row-start: auto;
+}
+.time-header {
+    border: 1px solid;
+}
+.day-col-first {
+    display: grid;
+    grid-column: 2;
+}
+
+.calendar-header {
+  text-align: center;
+  font-weight: bold;
+  border: 1px solid #dee2e6;
+}
+
+.calendar-cell {
+  border: 1px solid #dee2e6;
+  height: 40px;
+  cursor: pointer;
+  position: relative;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.calendar-cell.selected {
+  background-color: #2ecc71;
+}
+
+.weekend {
+  background-color: #f8f9fa;
+}
+
+.day-name {
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.date-number {
+  font-size: 1rem;
+}
+
+.calendar-cell:hover {
+  background-color: rgba(46, 204, 113, 0.3);
+}
+
+/* Improve responsiveness */
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: 70px repeat(auto-fill, minmax(60px, 1fr));
+  }
+}
