@@ -4,7 +4,7 @@ try {
     $pdo = new PDO('sqlite:events.db');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Create table if not exists
+    // Create events table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS events(
         uniqueid VARCHAR(255) PRIMARY KEY,
         event_name VARCHAR(255),
@@ -12,10 +12,71 @@ try {
         end_datetime INTEGER
     )");
 
-    // First check if the ID already exists
+    // Create availability table if not exists
+    $pdo->exec("CREATE TABLE IF NOT EXISTS availability(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id VARCHAR(255),
+        username VARCHAR(255),
+        date VARCHAR(10),
+        hour INTEGER,
+        FOREIGN KEY(event_id) REFERENCES events(uniqueid),
+        UNIQUE(event_id, username, date, hour)
+    )");
+
+    // Create user sessions table if not exists
+    $pdo->exec("CREATE TABLE IF NOT EXISTS user_sessions(
+        event_id VARCHAR(255),
+        username VARCHAR(255),
+        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(event_id, username),
+        FOREIGN KEY(event_id) REFERENCES events(uniqueid)
+    )");
+
+    // Get current user from session or default
+    session_start();
+    $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'Anonymous';
+
+    // Handle user change
+    if (isset($_POST['user']) && !empty($_POST['user'])) {
+        $newUser = trim($_POST['user']);
+        $_SESSION['user_' . $_GET['id']] = $newUser;
+        $currentUser = $newUser;
+        
+        // Update user session in database
+        $sessionStmt = $pdo->prepare("INSERT OR REPLACE INTO user_sessions(event_id, username, last_active) VALUES(?, ?, CURRENT_TIMESTAMP)");
+        $sessionStmt->execute([$_GET['id'], $currentUser]);
+        
+        header("Location: ?id=" . $_GET['id']);
+        exit;
+    }
+
+    // Handle availability save
+    if (isset($_POST['availability_data'])) {
+        $availabilityData = json_decode($_POST['availability_data'], true);
+        
+        if ($availabilityData && isset($availabilityData['user']) && isset($availabilityData['slots'])) {
+            $username = $availabilityData['user'];
+            $slots = $availabilityData['slots'];
+            
+            // Clear existing availability for this user and event
+            $clearStmt = $pdo->prepare("DELETE FROM availability WHERE event_id = ? AND username = ?");
+            $clearStmt->execute([$_GET['id'], $username]);
+            
+            // Insert new availability slots
+            $insertStmt = $pdo->prepare("INSERT INTO availability(event_id, username, date, hour) VALUES(?, ?, ?, ?)");
+            
+            foreach ($slots as $slot) {
+                $insertStmt->execute([$_GET['id'], $username, $slot['date'], $slot['hour']]);
+            }
+            
+            echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
+            exit;
+        }
+    }
+
+    // First check if the event exists
     $checkStmt = $pdo->prepare("SELECT * FROM events WHERE uniqueid = :uniqueid");
     $checkStmt->execute([':uniqueid' => $_GET['id']]);
-
     $event = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$event) {
@@ -24,7 +85,7 @@ try {
             header('Location: .#noevent');
             die;
         }
-        // Prepare and execute insert statement
+        // Create new event
         $stmt = $pdo->prepare("INSERT INTO events(event_name, uniqueid, start_datetime, end_datetime) 
                         VALUES(:event_name, :uniqueid, :start_datetime, :end_datetime)");
 
@@ -36,15 +97,26 @@ try {
         ]);
 
         header("Refresh:0");
+        exit;
     }
 
-    if (isset($_POST['user'])) {
+    // Get all users for this event
+    $usersStmt = $pdo->prepare("SELECT DISTINCT username FROM user_sessions WHERE event_id = ? ORDER BY last_active DESC");
+    $usersStmt->execute([$_GET['id']]);
+    $eventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    }
-    
+    // Get availability data for current user
+    $availabilityStmt = $pdo->prepare("SELECT date, hour FROM availability WHERE event_id = ? AND username = ?");
+    $availabilityStmt->execute([$_GET['id'], $currentUser]);
+    $userAvailability = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Get all availability data for the event (for displaying other users' availability)
+    $allAvailabilityStmt = $pdo->prepare("SELECT username, date, hour FROM availability WHERE event_id = ?");
+    $allAvailabilityStmt->execute([$_GET['id']]);
+    $allAvailability = $allAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    if ($e->getCode() == 23000) { // Integrity constraint violation
+    if ($e->getCode() == 23000) {
         echo "Error: This event ID already exists. Try making another event.";
     } else {
         echo "Error: " . $e->getMessage();
@@ -52,7 +124,6 @@ try {
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -75,14 +146,14 @@ try {
     <h1 class="text-center"><?php echo $event["event_name"]; ?></h1>
     <div class="row">
         <div class="col-md-3 d-grid mb-3">
-            <div class="h6 mt-2">Current User: jflkdsjaklfjdlskafjdlksja</div>
+            <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?></div>
         </div>
         <div class="col-md-3 d-grid mb-3">
-            <form id="changeuser" action="?id=<?php echo $event["uniqueid"]; ?>&change=1" method="post">
-                <span class="input-group">
-                    <input type="text" id="user" class="form-control" placeholder="User" name="user">
-                    <button class="btn btn-outline-secondary" type="submit" id="changeuser">Switch User</button>
-                </span>
+            <form id="changeuser" action="?id=<?php echo $event["uniqueid"]; ?>" method="post">
+                <div class="input-group">
+                    <input type="text" id="user" class="form-control" placeholder="Enter username" name="user" value="<?php echo htmlspecialchars($currentUser); ?>">
+                    <button class="btn btn-outline-secondary" type="submit">Switch User</button>
+                </div>
             </form>
         </div>
         <div class="col-md-3 d-grid mb-3">
