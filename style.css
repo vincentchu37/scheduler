@@ -60,3 +60,16 @@
     grid-template-columns: 70px repeat(auto-fill, minmax(60px, 1fr));
   }
 }
+
+.calendar-tooltip {
+    position: absolute;
+    background-color: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    pointer-events: none; /* Important: so it doesn't interfere with mouse events on cells themselves */
+    max-width: 250px; /* Optional: prevent very wide tooltips */
+    word-wrap: break-word; /* Optional: wrap long user lists */
+}

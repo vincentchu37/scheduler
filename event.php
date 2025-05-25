@@ -13,14 +13,15 @@ try {
     )");
 
     // Create availability table if not exists
+    // IMPORTANT: If events.db already exists with the old schema, 
+    // it must be deleted for this new schema to take effect.
     $pdo->exec("CREATE TABLE IF NOT EXISTS availability(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         event_id VARCHAR(255),
         username VARCHAR(255),
-        date VARCHAR(10),
-        hour INTEGER,
+        slot_timestamp INTEGER, -- Stores UTC epoch timestamp
         FOREIGN KEY(event_id) REFERENCES events(uniqueid),
-        UNIQUE(event_id, username, date, hour)
+        UNIQUE(event_id, username, slot_timestamp)
     )");
 
     // Create user sessions table if not exists
@@ -35,6 +36,7 @@ try {
     // Get current user from session or default
     session_start();
     $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'Anonymous';
+    $overallAvailabilityPercentage = 0;
 
     // Handle user change
     if (isset($_POST['user']) && !empty($_POST['user'])) {
@@ -51,27 +53,40 @@ try {
     }
 
     // Handle availability save
-    if (isset($_POST['availability_data'])) {
-        $availabilityData = json_decode($_POST['availability_data'], true);
-        
-        if ($availabilityData && isset($availabilityData['user']) && isset($availabilityData['slots'])) {
-            $username = $availabilityData['user'];
-            $slots = $availabilityData['slots'];
-            
-            // Clear existing availability for this user and event
-            $clearStmt = $pdo->prepare("DELETE FROM availability WHERE event_id = ? AND username = ?");
-            $clearStmt->execute([$_GET['id'], $username]);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action']) && $_POST['form_action'] === 'save_availability') {
+        $eventId = $_GET['id'];
+        $username = $currentUser; // Use $currentUser
+
+        // Clear existing availability for this user and event
+        $clearStmt = $pdo->prepare("DELETE FROM availability WHERE event_id = ? AND username = ?");
+        $clearStmt->execute([$eventId, $username]);
+
+        if (isset($_POST['selected_slots']) && is_array($_POST['selected_slots'])) {
+            $selectedSlots = $_POST['selected_slots'];
             
             // Insert new availability slots
-            $insertStmt = $pdo->prepare("INSERT INTO availability(event_id, username, date, hour) VALUES(?, ?, ?, ?)");
+            $insertStmt = $pdo->prepare("INSERT INTO availability(event_id, username, slot_timestamp) VALUES(?, ?, ?)");
             
-            foreach ($slots as $slot) {
-                $insertStmt->execute([$_GET['id'], $username, $slot['date'], $slot['hour']]);
+            foreach ($selectedSlots as $slotString) {
+                // slotString is "YYYY-MM-DD_H" (e.g., "2023-12-25_14" or "2023-12-25_9")
+                list($datePart, $hourPart) = explode('_', $slotString);
+                if ($datePart && isset($hourPart)) { // Ensure both parts exist
+                    try {
+                        // Create DateTime object in UTC and get timestamp
+                        $dt = new DateTime($datePart . ' ' . $hourPart . ':00:00', new DateTimeZone('UTC'));
+                        $slot_timestamp = $dt->getTimestamp();
+                        $insertStmt->execute([$eventId, $username, $slot_timestamp]);
+                    } catch (Exception $e) {
+                        // Handle potential DateTime creation errors, though format is controlled
+                        error_log("Error creating DateTime for slot: $slotString - " . $e->getMessage());
+                    }
+                }
             }
-            
-            echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
-            exit;
         }
+        
+        // Redirect back to the event page
+        header("Location: ?id=" . $eventId);
+        exit;
     }
 
     // First check if the event exists
@@ -106,14 +121,108 @@ try {
     $eventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
 
     // Get availability data for current user
-    $availabilityStmt = $pdo->prepare("SELECT date, hour FROM availability WHERE event_id = ? AND username = ?");
+    $availabilityStmt = $pdo->prepare("SELECT slot_timestamp FROM availability WHERE event_id = ? AND username = ?");
     $availabilityStmt->execute([$_GET['id'], $currentUser]);
-    $userAvailability = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+    $rawUserAvailability = $availabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+    $userAvailability = [];
+    foreach ($rawUserAvailability as $row) {
+        // Convert timestamp back to UTC date and hour for JavaScript
+        $dt = new DateTime('@' . $row['slot_timestamp'], new DateTimeZone('UTC'));
+        $userAvailability[] = ['date' => $dt->format('Y-m-d'), 'hour' => (int)$dt->format('G')];
+    }
 
     // Get all availability data for the event (for displaying other users' availability)
-    $allAvailabilityStmt = $pdo->prepare("SELECT username, date, hour FROM availability WHERE event_id = ?");
+    $allAvailabilityStmt = $pdo->prepare("SELECT username, slot_timestamp FROM availability WHERE event_id = ?");
     $allAvailabilityStmt->execute([$_GET['id']]);
-    $allAvailability = $allAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+    $rawAllAvailability = $allAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+    $allAvailability = [];
+    foreach ($rawAllAvailability as $row) {
+        // Convert timestamp back to UTC date and hour for PHP logic and JavaScript
+        $dt = new DateTime('@' . $row['slot_timestamp'], new DateTimeZone('UTC'));
+        $allAvailability[] = [
+            'username' => $row['username'],
+            'date' => $dt->format('Y-m-d'),
+            'hour' => (int)$dt->format('G')
+        ];
+    }
+
+    // Calculate total number of users who have interacted with the event
+    $totalEventUsers = count($eventUsers);
+
+    // Calculate per-slot availability counts
+    $perSlotAvailabilityCounts = [];
+    foreach ($allAvailability as $record) {
+        $slotKey = $record['date'] . '_' . $record['hour'];
+        $perSlotAvailabilityCounts[$slotKey] = ($perSlotAvailabilityCounts[$slotKey] ?? 0) + 1;
+    }
+
+    // Calculate per-slot availability percentages
+    $perSlotAvailabilityPercentages = [];
+    if ($totalEventUsers > 0) {
+        foreach ($perSlotAvailabilityCounts as $slotKey => $count) {
+            $perSlotAvailabilityPercentages[$slotKey] = round(($count / $totalEventUsers) * 100);
+        }
+    }
+
+    // Calculate Overall Availability Percentage
+    if ($event && isset($event['start_datetime'], $event['end_datetime'])) {
+        $startDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $event['start_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
+        $endDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $event['end_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
+
+        $possibleSlots = [];
+        $currentIterDateTime = $startDateTime;
+        while ($currentIterDateTime < $endDateTime) {
+            $possibleSlots[$currentIterDateTime->format('Y-m-d_G')] = true; // Use keys for uniqueness
+            $currentIterDateTime = $currentIterDateTime->add(new DateInterval('PT1H'));
+        }
+        $totalPossibleSlots = count($possibleSlots);
+
+        $uniqueAvailableSlotsSet = [];
+        foreach ($allAvailability as $avail) {
+            $uniqueAvailableSlotsSet[$avail['date'] . '_' . $avail['hour']] = true; // Use keys for uniqueness
+        }
+        $uniqueAvailableSlots = count($uniqueAvailableSlotsSet);
+
+        if ($totalPossibleSlots > 0) {
+            $overallAvailabilityPercentage = round(($uniqueAvailableSlots / $totalPossibleSlots) * 100);
+        }
+    }
+
+    // Prepare detailed slot user information for tooltips
+    $slotUserDetails = [];
+    if ($event && isset($event['start_datetime'], $event['end_datetime']) && !empty($eventUsers)) {
+        // Use the same $startDateTime and $endDateTime from Overall Availability Percentage calculation
+        // These are DateTimeImmutable objects in UTC.
+        $currentIterDateTime = $startDateTime; // Already defined above
+        while ($currentIterDateTime < $endDateTime) { // Already defined above
+            $dateStr = $currentIterDateTime->format('Y-m-d');
+            $hourVal = (int)$currentIterDateTime->format('G'); // Hour without leading zero, as integer
+            $currentSlotKey = $dateStr . '_' . $hourVal;
+
+            $availableForSlot = [];
+            foreach ($allAvailability as $avail) {
+                if ($avail['date'] === $dateStr && (int)$avail['hour'] === $hourVal) {
+                    $availableForSlot[] = $avail['username'];
+                }
+            }
+            $availableForSlotUnique = array_values(array_unique($availableForSlot));
+
+            $unavailableForSlot = [];
+            foreach ($eventUsers as $user) {
+                if (!in_array($user, $availableForSlotUnique)) {
+                    $unavailableForSlot[] = $user;
+                }
+            }
+            // No need for array_unique on $unavailableForSlot as $eventUsers is already unique
+            // and we are checking against availableForSlotUnique.
+
+            $slotUserDetails[$currentSlotKey] = [
+                'available' => $availableForSlotUnique,
+                'unavailable' => $unavailableForSlot // array_values not strictly needed if $eventUsers has sequential keys
+            ];
+            $currentIterDateTime = $currentIterDateTime->add(new DateInterval('PT1H'));
+        }
+    }
 
 } catch (PDOException $e) {
     if ($e->getCode() == 23000) {
@@ -139,6 +248,11 @@ try {
     <script>
         // Make $_POST data available as a global JavaScript object
         var data = <?php echo json_encode($event); ?>;
+        <?php
+        echo 'var userAvailability = ' . json_encode($userAvailability) . ';';
+        echo 'var perSlotAvailabilityPercentages = ' . json_encode($perSlotAvailabilityPercentages) . ';';
+        echo 'var slotUserDetails = ' . json_encode($slotUserDetails) . ';';
+        ?>
     </script>
 </head>
 <span class="float-end"></span>
@@ -164,7 +278,9 @@ try {
             </button>
         </div>
         <div class="col-md-3 d-grid mb-3">
-            <form id="save-availability" action="?id=<?php echo $event["uniqueid"]; ?>&save=1" method="post">
+            <form id="save-availability-form" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
+                <input type="hidden" name="form_action" value="save_availability">
+                <div id="selected-slots-container"></div>
                 <button type="submit" id="save-availability" class="btn btn-success">Save My Availability</button>
             </form>
         </div>
