@@ -34,7 +34,7 @@
 }
 
 .calendar-cell.selected {
-  background-color: #2ecc71;
+  border: 2px solid #000;
 }
 
 .weekend {
@@ -50,9 +50,6 @@
   font-size: 1rem;
 }
 
-.calendar-cell:hover {
-  background-color: rgba(46, 204, 113, 0.3);
-}
 
 /* Improve responsiveness */
 @media (max-width: 768px) {

@@ -35,19 +35,19 @@ try {
 
     // Get current user from session or default
     session_start();
-    $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'Anonymous';
+    $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'User_Undefined1951';
     $overallAvailabilityPercentage = 0;
 
     // Handle user change
-    if (isset($_POST['user']) && !empty($_POST['user'])) {
+    if (isset($_POST['user']) && !empty($_POST['user']) && ($_POST['user'] != 'User_Undefined1951')) {
         $newUser = trim($_POST['user']);
         $_SESSION['user_' . $_GET['id']] = $newUser;
         $currentUser = $newUser;
-        
+
         // Update user session in database
         $sessionStmt = $pdo->prepare("INSERT OR REPLACE INTO user_sessions(event_id, username, last_active) VALUES(?, ?, CURRENT_TIMESTAMP)");
         $sessionStmt->execute([$_GET['id'], $currentUser]);
-        
+
         header("Location: ?id=" . $_GET['id']);
         exit;
     }
@@ -63,10 +63,10 @@ try {
 
         if (isset($_POST['selected_slots']) && is_array($_POST['selected_slots'])) {
             $selectedSlots = $_POST['selected_slots'];
-            
+
             // Insert new availability slots
             $insertStmt = $pdo->prepare("INSERT INTO availability(event_id, username, slot_timestamp) VALUES(?, ?, ?)");
-            
+
             foreach ($selectedSlots as $slotString) {
                 // slotString is "YYYY-MM-DD_H" (e.g., "2023-12-25_14" or "2023-12-25_9")
                 list($datePart, $hourPart) = explode('_', $slotString);
@@ -83,7 +83,7 @@ try {
                 }
             }
         }
-        
+
         // Redirect back to the event page
         header("Location: ?id=" . $eventId);
         exit;
@@ -223,7 +223,6 @@ try {
             $currentIterDateTime = $currentIterDateTime->add(new DateInterval('PT1H'));
         }
     }
-
 } catch (PDOException $e) {
     if ($e->getCode() == 23000) {
         echo "Error: This event ID already exists. Try making another event.";
@@ -241,47 +240,37 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event</title>
+    <title><?php echo $event["event_name"]; ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/themes/base/theme.min.css" integrity="sha512-lfR3NT1DltR5o7HyoeYWngQbo6Ec4ITaZuIw6oAxIiCNYu22U5kpwHy9wAaN0vvBj3U6Uy2NNtAfiaKcDxfhTg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="style.css">
     <script>
         // Make $_POST data available as a global JavaScript object
-        var data = <?php echo json_encode($event); ?>;
         <?php
+        echo 'var data = ' . json_encode($event) . ';';
         echo 'var userAvailability = ' . json_encode($userAvailability) . ';';
         echo 'var perSlotAvailabilityPercentages = ' . json_encode($perSlotAvailabilityPercentages) . ';';
         echo 'var slotUserDetails = ' . json_encode($slotUserDetails) . ';';
         ?>
+        console.log(data);
     </script>
 </head>
-<span class="float-end"></span>
 <div class="container-fluid my-2">
     <h1 class="text-center"><?php echo $event["event_name"]; ?></h1>
-    <div class="row">
-        <div class="col-md-3 d-grid mb-3">
+    <div class="row justify-content-between mb-3">
+        <div class="col-md-4">
             <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?></div>
         </div>
-        <div class="col-md-3 d-grid mb-3">
-            <form id="changeuser" action="?id=<?php echo $event["uniqueid"]; ?>" method="post">
-                <div class="input-group">
-                    <input type="text" id="user" class="form-control" placeholder="Enter username" name="user" value="<?php echo htmlspecialchars($currentUser); ?>">
-                    <button class="btn btn-outline-secondary" type="submit">Switch User</button>
-                </div>
-            </form>
-        </div>
-        <div class="col-md-3 d-grid mb-3">
+        <div class="col-md-4 d-flex justify-content-end gap-2">
             <button type="button" id="copy-link" class="btn btn-outline-primary link-copy"
                 url-site="<?php echo "https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]"; ?>"
                 data-bs-original-title="Copy URL">
                 <i class="bi-share-fill"></i> Share this with others
             </button>
-        </div>
-        <div class="col-md-3 d-grid mb-3">
             <form id="save-availability-form" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
                 <input type="hidden" name="form_action" value="save_availability">
-                <div id="selected-slots-container"></div>
-                <button type="submit" id="save-availability" class="btn btn-success">Save My Availability</button>
+                <span id="selected-slots-container"></span>
+                <button type="submit" id="save-availability" class="btn btn-success"><strong>Save My Availability</strong></button>
             </form>
         </div>
     </div>
@@ -290,6 +279,24 @@ try {
 
 </div>
 
+<!-- Modal HTML -->
+<div class="modal fade" id="user" data-bs-keyboard="false" data-bs-backdrop="static" tabindex="-1" aria-labelledby="userselect" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalLabel">Who are you?</h5>
+            </div>
+            <div class="modal-body">
+                <form id="changeuser" action="?id=<?php echo $event["uniqueid"]; ?>" method="post">
+                    <div class="input-group">
+                        <input type="text" id="user" class="form-control" placeholder="Enter username" name="user">
+                        <button class="btn btn-outline-secondary" type="submit">Switch User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -298,6 +305,13 @@ try {
         if (select && userTimeZone) {
             select.value = userTimeZone;
         }
+        <?php 
+        if ($currentUser == 'User_Undefined1951') {
+            echo "var userModal = new bootstrap.Modal(document.getElementById('user'));
+            userModal.show();";
+        }
+        ?>
+
     });
 </script>
 

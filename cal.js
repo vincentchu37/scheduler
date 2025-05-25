@@ -127,9 +127,9 @@ function generateCalendarGrid(startDate, endDate, startTime, endTime) {
             aggregateDisplay.style.position = 'absolute';
             aggregateDisplay.style.bottom = '0';
             aggregateDisplay.style.left = '0';
-            aggregateDisplay.style.width = '100%';
-            aggregateDisplay.style.height = aggPercent + '%';
-            aggregateDisplay.style.backgroundColor = 'rgba(0, 255, 0, 0.5)'; // Semi-transparent green
+            aggregateDisplay.style.width = aggPercent + '%';
+            aggregateDisplay.style.height = '100%';
+            aggregateDisplay.style.backgroundColor = 'rgba(0, 255, 0, 0.3)'; // Semi-transparent green
             aggregateDisplay.style.zIndex = '0'; // Behind cell content (hour text)
             
             cell.appendChild(aggregateDisplay);
