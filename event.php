@@ -194,7 +194,7 @@ try {
         // Use the same $startDateTime and $endDateTime from Overall Availability Percentage calculation
         // These are DateTimeImmutable objects in UTC.
         $currentIterDateTime = $startDateTime; // Already defined above
-        while ($currentIterDateTime < $endDateTime) { // Already defined above
+        while ($currentIterDateTime <= $endDateTime) { // Already defined above
             $dateStr = $currentIterDateTime->format('Y-m-d');
             $hourVal = (int)$currentIterDateTime->format('G'); // Hour without leading zero, as integer
             $currentSlotKey = $dateStr . '_' . $hourVal;
@@ -252,7 +252,6 @@ try {
         echo 'var perSlotAvailabilityPercentages = ' . json_encode($perSlotAvailabilityPercentages) . ';';
         echo 'var slotUserDetails = ' . json_encode($slotUserDetails) . ';';
         ?>
-        console.log(data);
     </script>
 </head>
 <div class="container-fluid my-2">
