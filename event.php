@@ -33,8 +33,84 @@ try {
         FOREIGN KEY(event_id) REFERENCES events(uniqueid)
     )");
 
+    // Create event_meta table if not exists
+    $pdo->exec("CREATE TABLE IF NOT EXISTS event_meta (
+        meta_key VARCHAR(255) PRIMARY KEY,
+        meta_value TEXT
+    )");
+
+    // --- Automatic Cleanup of Old Events ---
+    try {
+        $cleanup_interval_seconds = 24 * 60 * 60; // 24 hours (adjust as needed)
+
+        $stmt_get_ts = $pdo->prepare("SELECT meta_value FROM event_meta WHERE meta_key = 'last_cleanup_timestamp'");
+        $stmt_get_ts->execute();
+        $last_cleanup_ts_row = $stmt_get_ts->fetch(PDO::FETCH_ASSOC);
+        $last_cleanup_ts = $last_cleanup_ts_row ? (int)$last_cleanup_ts_row['meta_value'] : 0;
+
+        if ((time() - $last_cleanup_ts) > $cleanup_interval_seconds) {
+            error_log("Event Cleanup: Starting automatic cleanup of old events."); // Log start
+
+            $ninety_days_ago_seconds = time() - (90 * 24 * 60 * 60);
+            $ninety_days_ago_milliseconds = $ninety_days_ago_seconds * 1000;
+
+            $stmt_select_old = $pdo->prepare("SELECT uniqueid FROM events WHERE end_datetime < :cutoff_time");
+            $stmt_select_old->execute([':cutoff_time' => $ninety_days_ago_milliseconds]);
+            $events_to_delete = $stmt_select_old->fetchAll(PDO::FETCH_COLUMN);
+
+            $deleted_count = 0;
+            if (!empty($events_to_delete)) {
+                $stmt_delete_availability = $pdo->prepare("DELETE FROM availability WHERE event_id = :event_id");
+                $stmt_delete_sessions = $pdo->prepare("DELETE FROM user_sessions WHERE event_id = :event_id");
+                $stmt_delete_event = $pdo->prepare("DELETE FROM events WHERE uniqueid = :uniqueid");
+
+                foreach ($events_to_delete as $uid) {
+                    try {
+                        $pdo->beginTransaction();
+                        $stmt_delete_availability->execute([':event_id' => $uid]);
+                        $stmt_delete_sessions->execute([':event_id' => $uid]);
+                        $stmt_delete_event->execute([':uniqueid' => $uid]);
+                        $pdo->commit();
+                        $deleted_count++;
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        error_log("Event Cleanup: Failed to delete event $uid: " . $e->getMessage());
+                    }
+                }
+            }
+
+            if ($deleted_count > 0) {
+                error_log("Event Cleanup: Successfully deleted $deleted_count old event(s).");
+            } else {
+                error_log("Event Cleanup: No old events found to delete.");
+            }
+
+            // Update last cleanup timestamp
+            $stmt_update_ts = $pdo->prepare("INSERT OR REPLACE INTO event_meta (meta_key, meta_value) VALUES ('last_cleanup_timestamp', ?)");
+            $stmt_update_ts->execute([time()]); // Store current UNIX timestamp (seconds)
+            error_log("Event Cleanup: Updated last_cleanup_timestamp.");
+
+        } else {
+            // Optional: Log that cleanup was skipped due to interval
+            // error_log("Event Cleanup: Skipped, interval not yet passed.");
+        }
+
+    } catch (Exception $e) {
+        error_log("Event Cleanup: Error during cleanup process: " . $e->getMessage());
+    }
+    // --- End of Automatic Cleanup ---
+
     // Get current user from session or default
     session_start();
+    // The check for $_GET['id'] is important for normal operation.
+    // It should not conflict with the cleanup logic as cleanup doesn't rely on $_GET['id'] and doesn't echo/exit.
+    if (!isset($_GET['id'])) {
+        // If no event ID is provided, and it's not a special action context (like a potential future API endpoint),
+        // then it's an invalid request for displaying an event.
+        // The cleanup logic above runs regardless of $_GET['id'].
+        echo "Event ID is required to display an event page.";
+        exit;
+    }
     $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'User_Undefined1951';
     $overallAvailabilityPercentage = 0;
 
@@ -194,7 +270,7 @@ try {
         // Use the same $startDateTime and $endDateTime from Overall Availability Percentage calculation
         // These are DateTimeImmutable objects in UTC.
         $currentIterDateTime = $startDateTime; // Already defined above
-        while ($currentIterDateTime <= $endDateTime) { // Already defined above
+        while ($currentIterDateTime < $endDateTime) { // Already defined above
             $dateStr = $currentIterDateTime->format('Y-m-d');
             $hourVal = (int)$currentIterDateTime->format('G'); // Hour without leading zero, as integer
             $currentSlotKey = $dateStr . '_' . $hourVal;
@@ -252,20 +328,20 @@ try {
         echo 'var perSlotAvailabilityPercentages = ' . json_encode($perSlotAvailabilityPercentages) . ';';
         echo 'var slotUserDetails = ' . json_encode($slotUserDetails) . ';';
         ?>
+        console.log(data);
     </script>
 </head>
 <div class="container-fluid my-2">
     <h1 class="text-center"><?php echo $event["event_name"]; ?></h1>
     <div class="row justify-content-between mb-3">
         <div class="col-md-4">
-            <div class="h6 mt-2">Current User: <strong><?php echo htmlspecialchars($currentUser); ?></strong> <a href="#user" data-bs-toggle="modal">Switch User</a></div>
+            <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?></div>
         </div>
-        <div class="col-md-6 d-flex justify-content-end gap-2">
-            <a href="."><button type="button" id="copy-link" class="btn btn-outline-primary">Make new event</button></a>
-            <button type="button" id="copy-link" class="btn btn-primary link-copy"
+        <div class="col-md-4 d-flex justify-content-end gap-2">
+            <button type="button" id="copy-link" class="btn btn-outline-primary link-copy"
                 url-site="<?php echo "https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]"; ?>"
                 data-bs-original-title="Copy URL">
-                <i class="bi-share-fill"></i> Copy event link
+                <i class="bi-share-fill"></i> Share this with others
             </button>
             <form id="save-availability-form" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
                 <input type="hidden" name="form_action" value="save_availability">
