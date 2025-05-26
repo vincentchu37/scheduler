@@ -3,6 +3,19 @@
 
 I totally vibe coded this in like 2 days so run at your own risk. I do have the full power of gitlab's security suite aimed at this and it seems to be alright. 
 
+### Docker deployment
+you'll first need to `touch /home/vincent/scheduler/events.db` and `chown 1000:1000 events.db`
+```
+services:
+  scheduler:
+    container_name: scheduler
+    image: registry.gitlab.com/quickbrownfoxes/scheduler
+    environment:
+      - WEB_DOCUMENT_INDEX=index.html
+    volumes:
+      - /home/vincent/scheduler/events.db:/app/events.db
+```
+
 Permissions required to run this app. 
 
 Where `82` is the userid of your fpm process!
