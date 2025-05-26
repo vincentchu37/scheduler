@@ -89,26 +89,33 @@ try {
             $stmt_update_ts = $pdo->prepare("INSERT OR REPLACE INTO event_meta (meta_key, meta_value) VALUES ('last_cleanup_timestamp', ?)");
             $stmt_update_ts->execute([time()]); // Store current UNIX timestamp (seconds)
             error_log("Event Cleanup: Updated last_cleanup_timestamp.");
-
         } else {
             // Optional: Log that cleanup was skipped due to interval
             // error_log("Event Cleanup: Skipped, interval not yet passed.");
         }
-
     } catch (Exception $e) {
         error_log("Event Cleanup: Error during cleanup process: " . $e->getMessage());
     }
     // --- End of Automatic Cleanup ---
-
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'domain' => '.quickbrownfoxes.org', // Current domain
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Strict'
+    ]);
     // Get current user from session or default
     session_start();
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    $csrf_token = $_SESSION['csrf_token'];
     // The check for $_GET['id'] is important for normal operation.
     // It should not conflict with the cleanup logic as cleanup doesn't rely on $_GET['id'] and doesn't echo/exit.
     if (!isset($_GET['id'])) {
-        // If no event ID is provided, and it's not a special action context (like a potential future API endpoint),
-        // then it's an invalid request for displaying an event.
-        // The cleanup logic above runs regardless of $_GET['id'].
         echo "Event ID is required to display an event page.";
+        header('Location: .#noevent');
         exit;
     }
     $currentUser = isset($_SESSION['user_' . $_GET['id']]) ? $_SESSION['user_' . $_GET['id']] : 'User_Undefined1951';
@@ -116,7 +123,16 @@ try {
 
     // Handle user change
     if (isset($_POST['user']) && !empty($_POST['user']) && ($_POST['user'] != 'User_Undefined1951')) {
-        $newUser = htmlspecialchars($_POST['user']);
+        if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+            die('CSRF token validation failed');
+        }
+        if (mb_strlen($userInput) < 3 || mb_strlen($userInput) > 32) {
+            echo "Username must be between 3 and 32 characters.";
+            exit;
+        }
+        $trimUser = trim($_POST['user']);
+        $truncUser = mb_substr($trimUser, 0, 32, 'UTF-8');
+        $newUser = $truncUser;
         $_SESSION['user_' . $_GET['id']] = $newUser;
         $currentUser = $newUser;
 
@@ -130,6 +146,9 @@ try {
 
     // Handle availability save
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action']) && $_POST['form_action'] === 'save_availability') {
+        if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+            die('CSRF token validation failed');
+        }
         $eventId = $_GET['id'];
         $username = $currentUser; // Use $currentUser
 
@@ -173,6 +192,11 @@ try {
     if (!$event) {
         if (empty($_POST)) {
             echo "No event with this ID.";
+            header('Location: .#noevent');
+            die;
+        }
+        if (!ctype_digit($_POST['start-datetime-utc']) || !ctype_digit($_POST['end-datetime-utc'])) {
+            echo "Invalid start or end time.";
             header('Location: .#noevent');
             die;
         }
@@ -355,6 +379,7 @@ try {
             <a href="#"><button type="button" id="copy-link" class="btn btn-primary" url-site="">Share event</button>
             </a>
             <form id="save-availability-form" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <input type="hidden" name="form_action" value="save_availability">
                 <span id="selected-slots-container"></span>
                 <button type="submit" id="save-availability" class="btn btn-success"><strong>Save My Availability</strong></button>
@@ -374,7 +399,8 @@ try {
                 <h5 class="modal-title" id="userModalLabel">Who are you?</h5>
             </div>
             <div class="modal-body">
-                <form id="changeuser" action="?id=<?php echo $event["uniqueid"]; ?>" method="post">
+                <form id="changeuser" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <div class="input-group">
                         <input type="text" id="user" class="form-control" placeholder="Enter username" name="user">
                         <button class="btn btn-outline-secondary" type="submit">Switch User</button>
@@ -392,7 +418,7 @@ try {
         if (select && userTimeZone) {
             select.value = userTimeZone;
         }
-        <?php 
+        <?php
         if ($currentUser == 'User_Undefined1951') {
             echo "var userModal = new bootstrap.Modal(document.getElementById('user'));
             userModal.show();";
@@ -406,5 +432,7 @@ try {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/jquery-ui.min.js" integrity="sha512-MSOo1aY+3pXCOCdGAYoBZ6YGI0aragoQsg1mKKBHXCYPIWxamwOE7Drh+N5CPgGI5SA9IEKJiPjdfqWFWmZtRA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="cal.js"></script>
-<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "8dd677a97b1d45aaab4f33a4b78eb87d"}'></script><!-- End Cloudflare Web Analytics -->
+<!-- Cloudflare Web Analytics -->
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "8dd677a97b1d45aaab4f33a4b78eb87d"}'></script><!-- End Cloudflare Web Analytics -->
+
 </html>
