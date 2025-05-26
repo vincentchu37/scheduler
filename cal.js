@@ -74,6 +74,76 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+// Helper function to create a calendar cell
+function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability) {
+    const cell = document.createElement('div');
+    cell.className = `calendar-cell ${isWeekend ? 'weekend' : ''}`;
+    cell.dataset.date = dateStr; // dateStr is local
+    cell.dataset.hour = hour;    // hour is local
+    cell.style.position = 'relative'; // For positioning aggregateDisplay
+
+    // Display hour text in cell (local time)
+    cell.textContent = `${hour}:00`;
+
+    // UTC Conversion for backend data
+    let slotDateTimeLocal = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour);
+    const utcYear = slotDateTimeLocal.getUTCFullYear();
+    const utcMonth = slotDateTimeLocal.getUTCMonth() + 1; // getUTCMonth is 0-indexed
+    const utcDay = slotDateTimeLocal.getUTCDate();
+    const utcHour = slotDateTimeLocal.getUTCHours(); // Integer 0-23
+    const pad = n => String(n).padStart(2, '0'); // Ensure pad is available
+    const utcDateStr = `${utcYear}-${pad(utcMonth)}-${pad(utcDay)}`;
+    const slotKeyUTC = `${utcDateStr}_${utcHour}`; // UTC key for slotUserDetails and perSlotAvailabilityPercentages
+
+    // Aggregate Availability Display (as background fill) - uses UTC key
+    const aggregateDisplay = document.createElement('div');
+    aggregateDisplay.className = 'aggregate-availability';
+    const aggPercent = perSlotAvailabilityPercentages[slotKeyUTC] || 0; // Use slotKeyUTC
+    aggregateDisplay.style.position = 'absolute';
+    aggregateDisplay.style.bottom = '0';
+    aggregateDisplay.style.left = '0';
+    aggregateDisplay.style.width = aggPercent + '%';
+    aggregateDisplay.style.height = '100%';
+    aggregateDisplay.style.backgroundColor = 'rgba(0, 255, 0, 0.3)'; // Semi-transparent green
+    aggregateDisplay.style.zIndex = '0'; // Behind cell content (hour text)
+    cell.appendChild(aggregateDisplay);
+
+    // Bootstrap Tooltip Attributes
+    let tooltipContentString = '';
+    if (typeof slotUserDetails !== 'undefined' && slotUserDetails && slotUserDetails[slotKeyUTC]) { // Use slotKeyUTC
+        const details = slotUserDetails[slotKeyUTC]; // Use slotKeyUTC
+        if (details.available && details.available.length > 0) {
+            tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<br>`;
+        } else {
+            tooltipContentString += '<strong>Available:</strong> None<br>';
+        }
+        if (details.unavailable && details.unavailable.length > 0) {
+            tooltipContentString += `<strong>Unavailable:</strong> ${details.unavailable.join(', ')}`;
+        } else {
+            tooltipContentString += '<strong>Unavailable:</strong> None';
+        }
+    } else {
+        tooltipContentString = 'No availability data for this slot.';
+    }
+    cell.setAttribute('data-bs-toggle', 'tooltip');
+    cell.setAttribute('data-bs-placement', 'top');
+    cell.setAttribute('data-bs-html', 'true');
+    cell.setAttribute('data-bs-title', tooltipContentString);
+
+    // Pre-select Current User's Availability & Populate Form (using UTC)
+    const isCurrentUserAvailable = userAvailability.some(slot => slot.date === utcDateStr && parseInt(slot.hour) === utcHour);
+    if (isCurrentUserAvailable) {
+        cell.classList.add('selected');
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'selected_slots[]';
+        hiddenInput.value = `${utcDateStr}_${utcHour}`; // Value format: YYYY-MM-DD_H (UTC date_UTC hour)
+        hiddenInput.id = `slot_${utcDateStr}_${utcHour}`; // ID based on UTC
+        selectedSlotsContainer.appendChild(hiddenInput);
+    }
+    return cell;
+}
+
 
 function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHourStrLocal, eventEndHourStrLocal) {
     const calendarGrid = document.getElementById('calendar-grid');
@@ -109,25 +179,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         // const dateStr = currentDate.toISOString().split('T')[0]; // This would be UTC, change to local
 
         let loopStartHour;
-        let loopEndHour; 
-
-        if (eventStartHourLocal <= eventEndHourLocal) {
-            // Event does NOT span midnight daily (e.g., 09:00-17:00 local)
-            loopStartHour = eventStartHourLocal;
-            loopEndHour = eventEndHourLocal; 
-        } else {
-            // Event DOES span midnight daily (e.g., 22:00 local to 02:00 local next day)
-            if (currentDate.toDateString() === localEventStartDate.toDateString()) { // First day
-                loopStartHour = eventStartHourLocal;
-                loopEndHour = 23;
-            } else if (currentDate.toDateString() === localEventEndDate.toDateString()) { // Last day
-                loopStartHour = 0;
-                loopEndHour = eventEndHourLocal;
-            } else { // Middle day(s)
-                loopStartHour = 0;
-                loopEndHour = 23;
-            }
-        }
+        let inclusiveLoopEndHour; 
 
         const dayCol = document.createElement('div');
         dayCol.className = 'day-col';
@@ -137,81 +189,49 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         daySlot.innerHTML = `<div class="date-number">${dayNum}</div><div class="day-name">${dayName}</div>`;
         dayCol.appendChild(daySlot);
 
-        for (let hour = loopStartHour; hour <= loopEndHour; hour++) {
-            const cell = document.createElement('div');
-            cell.className = `calendar-cell ${isWeekend ? 'weekend' : ''}`;
-            cell.dataset.date = dateStr; // dateStr is now local
-            cell.dataset.hour = hour; // hour is from loopStartHour/loopEndHour, which are local
-            cell.style.position = 'relative'; // For positioning aggregateDisplay
+        // New conditional logic for spanning events
+        const isSpanningEvent = eventStartHourLocal > eventEndHourLocal;
+        const isFirstDay = currentDate.toDateString() === localEventStartDate.toDateString();
+        const isLastDay = currentDate.toDateString() === localEventEndDate.toDateString();
+        const isMiddleDay = !isFirstDay && !isLastDay;
 
-            // Display hour text in cell (local time)
-            cell.textContent = `${hour}:00`; 
-
-            // UTC Conversion for backend data
-            let slotDateTimeLocal = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour);
-            const utcYear = slotDateTimeLocal.getUTCFullYear();
-            const utcMonth = slotDateTimeLocal.getUTCMonth() + 1; // getUTCMonth is 0-indexed
-            const utcDay = slotDateTimeLocal.getUTCDate();
-            const utcHour = slotDateTimeLocal.getUTCHours(); // Integer 0-23
-            const pad = n => String(n).padStart(2, '0'); // Ensure pad is available
-            const utcDateStr = `${utcYear}-${pad(utcMonth)}-${pad(utcDay)}`;
-            const slotKeyUTC = `${utcDateStr}_${utcHour}`; // UTC key for slotUserDetails and perSlotAvailabilityPercentages
-
-            // Aggregate Availability Display (as background fill) - uses UTC key
-            const aggregateDisplay = document.createElement('div');
-            aggregateDisplay.className = 'aggregate-availability';
-            // const currentSlotKey = `${dateStr}_${hour}`; // Key format: YYYY-MM-DD_H (local date_local hour)
-            const aggPercent = perSlotAvailabilityPercentages[slotKeyUTC] || 0; // Use slotKeyUTC
-
-            aggregateDisplay.style.position = 'absolute';
-            aggregateDisplay.style.bottom = '0';
-            aggregateDisplay.style.left = '0';
-            aggregateDisplay.style.width = aggPercent + '%';
-            aggregateDisplay.style.height = '100%';
-            aggregateDisplay.style.backgroundColor = 'rgba(0, 255, 0, 0.3)'; // Semi-transparent green
-            aggregateDisplay.style.zIndex = '0'; // Behind cell content (hour text)
-            
-            cell.appendChild(aggregateDisplay);
-
-            // Bootstrap Tooltip Attributes
-            // Use dateStr from the outer loop and hour from the current cell's loop iteration.
-            // cell.dataset.date (which is dateStr local) and cell.dataset.hour (which is loop's hour local) were set prior.
-            // const slotKey = `${dateStr}_${hour}`; // 'hour' (local) here is the loop variable, 'dateStr' (local) is from the outer loop.
-            let tooltipContentString = '';
-            
-            if (typeof slotUserDetails !== 'undefined' && slotUserDetails && slotUserDetails[slotKeyUTC]) { // Use slotKeyUTC
-                const details = slotUserDetails[slotKeyUTC]; // Use slotKeyUTC
-                if (details.available && details.available.length > 0) {
-                    tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<hr>`;
-                } else {
-                    tooltipContentString += '<strong>Available:</strong> None<hr>';
-                }
-                if (details.unavailable && details.unavailable.length > 0) {
-                    tooltipContentString += `<strong class="text-danger">Unavailable:</strong> ${details.unavailable.join(', ')}`;
-                } else {
-                    tooltipContentString += '<strong class="text-danger">Unavailable:</strong> None';
-                }
-            } else {
-                tooltipContentString = 'No availability data for this slot.';
+        if (isSpanningEvent && isMiddleDay) {
+            // First Block (Early Hours) for middle day of spanning event
+            for (let hour = 0; hour <= eventEndHourLocal; hour++) {
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+                dayCol.appendChild(cell);
             }
 
-            cell.setAttribute('data-bs-toggle', 'tooltip');
-            cell.setAttribute('data-bs-placement', 'top');
-            cell.setAttribute('data-bs-html', 'true');
-            cell.setAttribute('data-bs-title', tooltipContentString);
-            
-            // Pre-select Current User's Availability & Populate Form (using UTC)
-            const isCurrentUserAvailable = userAvailability.some(slot => slot.date === utcDateStr && parseInt(slot.hour) === utcHour);
-            if (isCurrentUserAvailable) {
-                cell.classList.add('selected');
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'selected_slots[]';
-                hiddenInput.value = `${utcDateStr}_${utcHour}`; // Value format: YYYY-MM-DD_H (UTC date_UTC hour)
-                hiddenInput.id = `slot_${utcDateStr}_${utcHour}`; // ID based on UTC
-                selectedSlotsContainer.appendChild(hiddenInput);
+            // Separator
+            const separator = document.createElement('div');
+            separator.className = 'time-gap-separator';
+            // You might want to add some text or style to the separator
+            // separator.textContent = '---'; 
+            dayCol.appendChild(separator);
+
+            // Second Block (Late Hours) for middle day of spanning event
+            for (let hour = eventStartHourLocal; hour <= 23; hour++) {
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+                dayCol.appendChild(cell);
             }
-            dayCol.appendChild(cell);
+        } else {
+            // Existing logic for first/last day of spanning event, or any day of non-spanning event
+            if (eventStartHourLocal <= eventEndHourLocal) { // Non-spanning or single day
+                loopStartHour = eventStartHourLocal;
+                inclusiveLoopEndHour = eventEndHourLocal;
+            } else { // Spanning event - first or last day
+                if (isFirstDay) {
+                    loopStartHour = eventStartHourLocal;
+                    inclusiveLoopEndHour = 23;
+                } else { // isLastDay (because isMiddleDay is handled above)
+                    loopStartHour = 0;
+                    inclusiveLoopEndHour = eventEndHourLocal;
+                }
+            }
+            for (let hour = loopStartHour; hour <= inclusiveLoopEndHour; hour++) {
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+                dayCol.appendChild(cell);
+            }
         }
         gridDiv.appendChild(dayCol);
     }

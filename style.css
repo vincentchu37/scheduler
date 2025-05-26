@@ -70,3 +70,11 @@
     max-width: 250px; /* Optional: prevent very wide tooltips */
     word-wrap: break-word; /* Optional: wrap long user lists */
 }
+
+.time-gap-separator {
+    height: 10px; /* Provide some space */
+    border-top: 1px solid #cccccc; /* A light line for separation */
+    margin: 5px 0; /* Some margin around the line */
+    grid-column: 1 / -1; /* Make it span the entire column if inside a grid item, though it's directly in dayCol */
+    background-color: #f0f0f0; /* Slight background to make the gap more visible */
+}
