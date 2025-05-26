@@ -126,10 +126,6 @@ try {
         if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
             die('CSRF token validation failed');
         }
-        if (mb_strlen($userInput) < 3 || mb_strlen($userInput) > 32) {
-            echo "Username must be between 3 and 32 characters.";
-            exit;
-        }
         $trimUser = trim($_POST['user']);
         $truncUser = mb_substr($trimUser, 0, 32, 'UTF-8');
         $newUser = $truncUser;
