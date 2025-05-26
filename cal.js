@@ -248,129 +248,144 @@ function setupCellInteractions() {
     let isMouseDown = false;
     let hasDragged = false;
     let anchorCellElement = null;
-    let anchorCellData = null;
-    let currentDragSelectMode = true;
-    let initialCellStates = new Map();
+    let anchorCellData = null; // { date: string, hour: int }
+    let currentDragSelectMode = true; // true to select, false to deselect
+    let initialCellStates = new Map(); // Stores initial selection state of all cells
 
-    cells.forEach(cell => {
-        cell.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isMouseDown = true;
-            hasDragged = false;
-            anchorCellElement = cell;
-            anchorCellData = { date: cell.dataset.date, hour: parseInt(cell.dataset.hour) };
-            currentDragSelectMode = !cell.classList.contains('selected');
+    function updateCellSelection(cellElement, select, cellDate, cellHour) {
+        // Convert cell's local date/hour to UTC for hidden input value/ID
+        let tempDate = new Date(cellDate.substring(0,4), cellDate.substring(5,7)-1, cellDate.substring(8,10), cellHour);
+        const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
+        const inputId = 'slot_' + slotValueUTC;
 
-            initialCellStates.clear();
-            document.querySelectorAll('#calendar-grid .calendar-cell').forEach(c => {
-                initialCellStates.set(c.dataset.date + '_' + c.dataset.hour, c.classList.contains('selected'));
-            });
-
-            const tooltipInstance = bootstrap.Tooltip.getInstance(anchorCellElement);
-            if (tooltipInstance) {
-                tooltipInstance.hide();
+        if (select) {
+            cellElement.classList.add('selected');
+            if (!document.getElementById(inputId)) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'selected_slots[]';
+                hiddenInput.value = slotValueUTC;
+                hiddenInput.id = inputId;
+                selectedSlotsContainer.appendChild(hiddenInput);
             }
+        } else {
+            cellElement.classList.remove('selected');
+            const existingInput = document.getElementById(inputId);
+            if (existingInput) {
+                selectedSlotsContainer.removeChild(existingInput);
+            }
+        }
+    }
+
+    function handleDragStart(cellElement, event) {
+        event.preventDefault();
+        isMouseDown = true;
+        hasDragged = false;
+        anchorCellElement = cellElement;
+        anchorCellData = { date: cellElement.dataset.date, hour: parseInt(cellElement.dataset.hour) };
+        currentDragSelectMode = !cellElement.classList.contains('selected');
+        
+        initialCellStates.clear();
+        document.querySelectorAll('#calendar-grid .calendar-cell').forEach(c => {
+            initialCellStates.set(c.dataset.date + '_' + c.dataset.hour, c.classList.contains('selected'));
         });
-    });
 
-    calendarGrid.addEventListener('mousemove', (e) => {
+        const tooltipInstance = bootstrap.Tooltip.getInstance(anchorCellElement);
+        if (tooltipInstance) {
+            tooltipInstance.hide();
+        }
+    }
+
+    function handleDragMove(clientX, clientY) {
         if (!isMouseDown) return;
-        hasDragged = true; // Set if mouse is down and moving
+        hasDragged = true;
 
-        // Rectangle selection logic (from previous implementation, adapted for new state vars)
-        const currentHoverCell = e.target.closest('.calendar-cell');
-        if (!currentHoverCell) return;
+        // Determine current hover cell from clientX, clientY
+        // This requires a bit more logic if not directly using event.target
+        // For mousemove, event.target within the calendarGrid listener is usually sufficient
+        // For touchmove, you'd use document.elementFromPoint(clientX, clientY)
+        let currentHoverCell = document.elementFromPoint(clientX, clientY);
+        if (currentHoverCell && !currentHoverCell.classList.contains('calendar-cell')) {
+            currentHoverCell = currentHoverCell.closest('.calendar-cell');
+        }
+        
+        if (!currentHoverCell) return; // Not over a cell
 
         const currentHoverDate = currentHoverCell.dataset.date;
         const currentHoverHour = parseInt(currentHoverCell.dataset.hour);
+
+        if (!anchorCellData) return; // Should not happen if isMouseDown is true
 
         const minDate = (anchorCellData.date < currentHoverDate) ? anchorCellData.date : currentHoverDate;
         const maxDate = (anchorCellData.date > currentHoverDate) ? anchorCellData.date : currentHoverDate;
         const minHour = (anchorCellData.hour < currentHoverHour) ? anchorCellData.hour : currentHoverHour;
         const maxHour = (anchorCellData.hour > currentHoverHour) ? anchorCellData.hour : currentHoverHour;
-
+        
         document.querySelectorAll('#calendar-grid .calendar-cell').forEach(cellToUpdate => {
             const cellDate = cellToUpdate.dataset.date;
             const cellHour = parseInt(cellToUpdate.dataset.hour);
             const cellKey = cellDate + '_' + cellHour;
-
-            let tempDate = new Date(cellDate.substring(0, 4), cellDate.substring(5, 7) - 1, cellDate.substring(8, 10), cellHour);
-            const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
-            const inputId = 'slot_' + slotValueUTC;
-
+            
             if (cellDate >= minDate && cellDate <= maxDate && cellHour >= minHour && cellHour <= maxHour) {
-                if (currentDragSelectMode) {
-                    cellToUpdate.classList.add('selected');
-                    if (!document.getElementById(inputId)) {
-                        const hiddenInput = document.createElement('input');
-                        hiddenInput.type = 'hidden';
-                        hiddenInput.name = 'selected_slots[]';
-                        hiddenInput.value = slotValueUTC;
-                        hiddenInput.id = inputId;
-                        selectedSlotsContainer.appendChild(hiddenInput);
-                    }
-                } else {
-                    cellToUpdate.classList.remove('selected');
-                    const existingInput = document.getElementById(inputId);
-                    if (existingInput) {
-                        selectedSlotsContainer.removeChild(existingInput);
-                    }
-                }
+                // Cell is IN the rectangle
+                updateCellSelection(cellToUpdate, currentDragSelectMode, cellDate, cellHour);
             } else {
+                // Cell is OUTSIDE the rectangle - revert to initial state
                 const initialStateSelected = initialCellStates.get(cellKey);
-                if (initialStateSelected) {
-                    cellToUpdate.classList.add('selected');
-                    if (!document.getElementById(inputId)) {
-                        const hiddenInput = document.createElement('input');
-                        hiddenInput.type = 'hidden';
-                        hiddenInput.name = 'selected_slots[]';
-                        hiddenInput.value = slotValueUTC;
-                        hiddenInput.id = inputId;
-                        selectedSlotsContainer.appendChild(hiddenInput);
-                    }
-                } else {
-                    cellToUpdate.classList.remove('selected');
-                    const existingInput = document.getElementById(inputId);
-                    if (existingInput) {
-                        selectedSlotsContainer.removeChild(existingInput);
-                    }
-                }
+                updateCellSelection(cellToUpdate, initialStateSelected, cellDate, cellHour);
             }
         });
-    });
+    }
 
-    document.addEventListener('mouseup', () => {
+    function handleDragEnd() {
         if (!isMouseDown) return;
 
-        if (!hasDragged && anchorCellElement) {
-            const cellToToggle = anchorCellElement;
-            let tempDate = new Date(anchorCellData.date.substring(0, 4), anchorCellData.date.substring(5, 7) - 1, anchorCellData.date.substring(8, 10), anchorCellData.hour);
-            const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
-            const inputId = 'slot_' + slotValueUTC;
-
-            if (currentDragSelectMode) {
-                cellToToggle.classList.add('selected');
-                if (!document.getElementById(inputId)) {
-                    const hiddenInput = document.createElement('input');
-                    hiddenInput.type = 'hidden';
-                    hiddenInput.name = 'selected_slots[]';
-                    hiddenInput.value = slotValueUTC;
-                    hiddenInput.id = inputId;
-                    selectedSlotsContainer.appendChild(hiddenInput);
-                }
-            } else {
-                cellToToggle.classList.remove('selected');
-                const existingInput = document.getElementById(inputId);
-                if (existingInput) {
-                    selectedSlotsContainer.removeChild(existingInput);
-                }
-            }
+        if (!hasDragged && anchorCellElement) { 
+             // This was a click, not a drag
+             updateCellSelection(anchorCellElement, currentDragSelectMode, anchorCellData.date, anchorCellData.hour);
         }
-
+        
+        // Reset all state variables
         isMouseDown = false;
         hasDragged = false;
         anchorCellElement = null;
         anchorCellData = null;
         initialCellStates.clear();
+    }
+
+    cells.forEach(cell => {
+        cell.addEventListener('mousedown', (e) => handleDragStart(cell, e));
+        cell.addEventListener('touchstart', function(e) {
+            // Pass the cell element and the event itself to handleDragStart.
+            // handleDragStart will call e.preventDefault() internally.
+            handleDragStart(this, e); 
+        });
+    });
+
+    calendarGrid.addEventListener('mousemove', (e) => {
+        // For mousemove, event.target is reliable if the listener is on calendarGrid
+        // and we use e.target.closest('.calendar-cell')
+        // However, to align with the generic clientX/clientY for touch, we can pass those.
+        handleDragMove(e.clientX, e.clientY);
+    });
+
+    calendarGrid.addEventListener('touchmove', function(e) {
+        if (!isMouseDown) return; // isMouseDown is set by handleDragStart
+
+        // Prevent scrolling while dragging to select
+        e.preventDefault(); 
+
+        if (e.touches.length > 0) {
+            const touch = e.touches[0];
+            handleDragMove(touch.clientX, touch.clientY);
+        }
+    });
+
+    document.addEventListener('mouseup', handleDragEnd);
+    document.addEventListener('touchend', function(e) {
+        // Check if isMouseDown was true, as touchend can fire for various reasons.
+        if (isMouseDown) { 
+            handleDragEnd();
+        }
     });
 }
