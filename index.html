@@ -224,10 +224,10 @@
                 const dateError = document.getElementById('date-error');
                 const timeError = document.getElementById('time-error');
                 const submitBtn = document.getElementById('submit');
-                const startDateUtc = parseInt(document.getElementById('start-datetime-utc').value, 10);
-                const endDateUtc = parseInt(document.getElementById('end-datetime-utc').value, 10);
-                const startTime = parseInt(document.getElementById('start-time').value, 10);
-                const endTime = parseInt(document.getElementById('end-time').value, 10);
+                let startDateUtc = parseInt(document.getElementById('start-datetime-utc').value, 10);
+                let endDateUtc = parseInt(document.getElementById('end-datetime-utc').value, 10);
+                let startTime = parseInt(document.getElementById('start-time').value, 10);
+                let endTime = parseInt(document.getElementById('end-time').value, 10);
                 if (startDateUtc >= endDateUtc) {
                     dateError.style.display = 'block';
                     submitBtn.disabled = true;
@@ -235,16 +235,12 @@
                     dateError.style.display = 'none';
                     submitBtn.disabled = false;
                 }
-                if (startTime = endTime) {
+                if (startTime == endTime) {
                     timeError.style.display = 'block';
                     submitBtn.disabled = true;
                 } else {
                     timeError.style.display = 'none';
                     submitBtn.disabled = false;
-                }
-                if (endTime > '23') {
-                    timeError.style.display = 'block';
-                    submitBtn.disabled = true;
                 }
 
             }
