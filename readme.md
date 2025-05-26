@@ -16,6 +16,7 @@ services:
       - /home/vincent/scheduler/events.db:/app/events.db
 ```
 
+### Regular fpm deployment
 Permissions required to run this app. 
 
 Where `82` is the userid of your fpm process!
