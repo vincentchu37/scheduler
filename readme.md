@@ -1,7 +1,12 @@
 # Event scheduler app
-## Got tired of using when2meet so here we are!
+
+I wanted a self hosted version of when2meet while making some (imo) ui improvments. 
 
 I totally vibe coded this in like 2 days so run at your own risk. I do have the full power of gitlab's security suite aimed at this and it seems to be alright. 
+
+Try it here:
+
+https://scheduler.quickbrownfoxes.org/
 
 ### Docker deployment
 you'll first need to `touch /home/vincent/scheduler/events.db` and `chown 1000:1000 events.db`

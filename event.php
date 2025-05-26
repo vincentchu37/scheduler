@@ -116,7 +116,7 @@ try {
 
     // Handle user change
     if (isset($_POST['user']) && !empty($_POST['user']) && ($_POST['user'] != 'User_Undefined1951')) {
-        $newUser = trim($_POST['user']);
+        $newUser = htmlspecialchars($_POST['user']);
         $_SESSION['user_' . $_GET['id']] = $newUser;
         $currentUser = $newUser;
 
@@ -322,7 +322,7 @@ try {
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Event scheduler" />
     <meta property="og:description" content="Easy to use, mobile friendly event scheduler for groups!" />
-    <title><?php echo $event["event_name"]; ?></title>
+    <title><?php echo htmlspecialchars($event["event_name"]); ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/themes/base/theme.min.css" integrity="sha512-lfR3NT1DltR5o7HyoeYWngQbo6Ec4ITaZuIw6oAxIiCNYu22U5kpwHy9wAaN0vvBj3U6Uy2NNtAfiaKcDxfhTg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="style.css">
@@ -340,7 +340,7 @@ try {
 <div class="container-fluid my-2">
     <div class="row justify-content-between">
         <div class="col-md-4">
-            <h1><?php echo $event["event_name"]; ?></h1>
+            <h1><?php echo htmlspecialchars($event["event_name"]); ?></h1>
         </div>
         <div class="col-md-6 d-flex justify-content-end">
             <div id="event-meta"></div>
