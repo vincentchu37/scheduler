@@ -335,10 +335,11 @@ try {
     <h1 class="text-center"><?php echo $event["event_name"]; ?></h1>
     <div class="row justify-content-between mb-3">
         <div class="col-md-4">
-            <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?></div>
+            <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?> <a href="#user" data-bs-toggle="modal">Switch User</a></div>
         </div>
-        <div class="col-md-4 d-flex justify-content-end gap-2">
-            <button type="button" id="copy-link" class="btn btn-outline-primary link-copy"
+        <div class="col-md-6 d-flex justify-content-end gap-2">
+            <a href="."><button type="button" class="btn btn-outline-primary">New Event</button></a>
+            <button type="button" id="copy-link" class="btn btn-primary link-copy"
                 url-site="<?php echo "https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]"; ?>"
                 data-bs-original-title="Copy URL">
                 <i class="bi-share-fill"></i> Share this with others
