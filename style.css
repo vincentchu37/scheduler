@@ -38,7 +38,7 @@
 }
 
 .weekend {
-  background-color: #f8f9fa;
+  background-color: #dcf3f8;
 }
 
 .day-name {
@@ -77,4 +77,11 @@
     margin: 5px 0; /* Some margin around the line */
     grid-column: 1 / -1; /* Make it span the entire column if inside a grid item, though it's directly in dayCol */
     background-color: #f0f0f0; /* Slight background to make the gap more visible */
+}
+
+.disabled-event-slot {
+    background-color: #636363;
+    color: transparent;
+    opacity: 0.7; 
+    cursor: not-allowed;
 }

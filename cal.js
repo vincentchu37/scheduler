@@ -75,9 +75,14 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Helper function to create a calendar cell
-function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability) {
+function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isActuallySchedulable) {
     const cell = document.createElement('div');
     cell.className = `calendar-cell ${isWeekend ? 'weekend' : ''}`;
+    
+    if (!isActuallySchedulable) {
+        cell.classList.add('disabled-event-slot','disabled');
+    }
+
     cell.dataset.date = dateStr; // dateStr is local
     cell.dataset.hour = hour;    // hour is local
     cell.style.position = 'relative'; // For positioning aggregateDisplay
@@ -108,27 +113,29 @@ function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlots
     aggregateDisplay.style.zIndex = '0'; // Behind cell content (hour text)
     cell.appendChild(aggregateDisplay);
 
-    // Bootstrap Tooltip Attributes
-    let tooltipContentString = '';
-    if (typeof slotUserDetails !== 'undefined' && slotUserDetails && slotUserDetails[slotKeyUTC]) { // Use slotKeyUTC
-        const details = slotUserDetails[slotKeyUTC]; // Use slotKeyUTC
-        if (details.available && details.available.length > 0) {
-            tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<hr>`;
+    if (isActuallySchedulable) {
+        // Bootstrap Tooltip Attributes - Only set if the cell is schedulable
+        let tooltipContentString = '';
+        if (typeof slotUserDetails !== 'undefined' && slotUserDetails && slotUserDetails[slotKeyUTC]) { // Use slotKeyUTC
+            const details = slotUserDetails[slotKeyUTC]; // Use slotKeyUTC
+            if (details.available && details.available.length > 0) {
+                tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<hr>`;
+            } else {
+                tooltipContentString += '<strong>Available:</strong><hr>';
+            }
+            if (details.unavailable && details.unavailable.length > 0) {
+                tooltipContentString += `<strong class="text-danger">Unavailable:</strong> ${details.unavailable.join(', ')}`;
+            } else {
+                tooltipContentString += '<strong class="text-danger">Unavailable:</strong>';
+            }
         } else {
-            tooltipContentString += '<strong>Available:</strong><hr>';
+            tooltipContentString = 'No availability data for this slot.';
         }
-        if (details.unavailable && details.unavailable.length > 0) {
-            tooltipContentString += `<strong class="text-danger">Unavailable:</strong> ${details.unavailable.join(', ')}`;
-        } else {
-            tooltipContentString += '<strong class="text-danger">Unavailable:</strong>';
-        }
-    } else {
-        tooltipContentString = 'No availability data for this slot.';
+        cell.setAttribute('data-bs-toggle', 'tooltip');
+        cell.setAttribute('data-bs-placement', 'top');
+        cell.setAttribute('data-bs-html', 'true');
+        cell.setAttribute('data-bs-title', tooltipContentString);
     }
-    cell.setAttribute('data-bs-toggle', 'tooltip');
-    cell.setAttribute('data-bs-placement', 'top');
-    cell.setAttribute('data-bs-html', 'true');
-    cell.setAttribute('data-bs-title', tooltipContentString);
 
     // Pre-select Current User's Availability & Populate Form (using UTC)
     const isCurrentUserAvailable = userAvailability.some(slot => slot.date === utcDateStr && parseInt(slot.hour) === utcHour);
@@ -179,9 +186,6 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
         // const dateStr = currentDate.toISOString().split('T')[0]; // This would be UTC, change to local
 
-        let loopStartHour;
-        let inclusiveLoopEndHour;
-
         const dayCol = document.createElement('div');
         dayCol.className = 'day-col';
 
@@ -190,47 +194,48 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         daySlot.innerHTML = `<div class="date-number">${monthNum}/${dayNum}</div><div class="day-name">${dayName}</div>`;
         dayCol.appendChild(daySlot);
 
-        // New conditional logic for spanning events
         const isSpanningEvent = eventStartHourLocal > eventEndHourLocal;
-        const isFirstDay = currentDate.toDateString() === localEventStartDate.toDateString();
-        const isLastDay = currentDate.toDateString() === localEventEndDate.toDateString();
-        const isMiddleDay = !isFirstDay && !isLastDay;
+        const isFirstDay = currentDate.toDateString() === localEventStartDate.toDateString(); // Retained for potential future use, but not used in current simplified logic
+        const isLastDay = currentDate.toDateString() === localEventEndDate.toDateString();   // Retained for potential future use, but not used in current simplified logic
+        const isMiddleDay = !isFirstDay && !isLastDay; // Retained for potential future use, but not used in current simplified logic
+        
+        // Inside the loop for each currentDate / dayCol:
 
-        if (isSpanningEvent && isMiddleDay) {
-            // First Block (Early Hours) for middle day of spanning event
+        // Redundant declarations of isFirstDay and isLastDay removed.
+        // The isMiddleDay variable from the original block (around line 198) is used.
+        // The commented-out isMiddleDay declaration below is also implicitly removed by this change.
+        
+        if (isSpanningEvent) {
+            // Render "early hours" block (0 to eventEndHourLocal)
             for (let hour = 0; hour <= eventEndHourLocal; hour++) {
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+                let isCellSchedulable = true; // Default for this cell
+                if (isFirstDay) {
+                    isCellSchedulable = false; // Early hours on first day are not schedulable
+                }
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isCellSchedulable);
                 dayCol.appendChild(cell);
             }
 
-            // Separator
+            // Render Separator
             const separator = document.createElement('div');
             separator.className = 'time-gap-separator';
-            // You might want to add some text or style to the separator
-            // separator.textContent = '---'; 
             dayCol.appendChild(separator);
 
-            // Second Block (Late Hours) for middle day of spanning event
+            // Render "late hours" block (eventStartHourLocal to 23)
             for (let hour = eventStartHourLocal; hour <= 23; hour++) {
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+                let isCellSchedulable = true; // Default for this cell
+                if (isLastDay) {
+                    isCellSchedulable = false; // Late hours on last day are not schedulable
+                }
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isCellSchedulable);
                 dayCol.appendChild(cell);
             }
         } else {
-            // Existing logic for first/last day of spanning event, or any day of non-spanning event
-            if (eventStartHourLocal <= eventEndHourLocal) { // Non-spanning or single day
-                loopStartHour = eventStartHourLocal;
-                inclusiveLoopEndHour = eventEndHourLocal;
-            } else { // Spanning event - first or last day
-                if (isFirstDay) {
-                    loopStartHour = eventStartHourLocal;
-                    inclusiveLoopEndHour = 23;
-                } else { // isLastDay (because isMiddleDay is handled above)
-                    loopStartHour = 0;
-                    inclusiveLoopEndHour = eventEndHourLocal;
-                }
-            }
-            for (let hour = loopStartHour; hour <= inclusiveLoopEndHour; hour++) {
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability);
+            // Case: Non-spanning event (e.g., 09:00 - 17:00)
+            // Render as a single, continuous block
+            for (let hour = eventStartHourLocal; hour <= eventEndHourLocal; hour++) {
+                // For non-spanning events, all rendered cells are schedulable
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, true);
                 dayCol.appendChild(cell);
             }
         }
@@ -253,6 +258,9 @@ function setupCellInteractions() {
     let initialCellStates = new Map(); // Stores initial selection state of all cells
 
     function updateCellSelection(cellElement, select, cellDate, cellHour) {
+        if (cellElement.classList.contains('disabled-event-slot')) {
+            return; // Do not allow selection changes for disabled-event-slots
+        }
         // Convert cell's local date/hour to UTC for hidden input value/ID
         let tempDate = new Date(cellDate.substring(0,4), cellDate.substring(5,7)-1, cellDate.substring(8,10), cellHour);
         const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
@@ -278,6 +286,11 @@ function setupCellInteractions() {
     }
 
     function handleDragStart(cellElement, event) {
+        if (cellElement.classList.contains('disabled-event-slot')) {
+            isMouseDown = false; // Ensure no drag operation starts or continues
+            event.preventDefault(); // Prevent any default action like text selection
+            return; // Exit the function early, do not process click/drag on disabled slot
+        }
         event.preventDefault();
         isMouseDown = true;
         hasDragged = false;
