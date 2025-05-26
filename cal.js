@@ -113,14 +113,14 @@ function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlots
     if (typeof slotUserDetails !== 'undefined' && slotUserDetails && slotUserDetails[slotKeyUTC]) { // Use slotKeyUTC
         const details = slotUserDetails[slotKeyUTC]; // Use slotKeyUTC
         if (details.available && details.available.length > 0) {
-            tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<br>`;
+            tooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<hr>`;
         } else {
-            tooltipContentString += '<strong>Available:</strong> None<br>';
+            tooltipContentString += '<strong>Available:</strong><hr>';
         }
         if (details.unavailable && details.unavailable.length > 0) {
-            tooltipContentString += `<strong>Unavailable:</strong> ${details.unavailable.join(', ')}`;
+            tooltipContentString += `<strong class="text-danger">Unavailable:</strong> ${details.unavailable.join(', ')}`;
         } else {
-            tooltipContentString += '<strong>Unavailable:</strong> None';
+            tooltipContentString += '<strong class="text-danger">Unavailable:</strong>';
         }
     } else {
         tooltipContentString = 'No availability data for this slot.';
