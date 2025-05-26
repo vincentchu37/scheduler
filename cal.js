@@ -355,7 +355,7 @@ function setupCellInteractions() {
 
         if (!hasDragged && anchorCellElement) { 
              // This was a click, not a drag
-             updateCellSelection(anchorCellElement, currentDragSelectMode, anchorCellData.date, anchorCellData.hour);
+            updateCellSelection(anchorCellElement, currentDragSelectMode, anchorCellData.date, anchorCellData.hour);
         }
         
         // Reset all state variables

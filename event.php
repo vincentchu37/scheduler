@@ -333,7 +333,7 @@ try {
     </script>
 </head>
 <div class="container-fluid my-2">
-    <h1 class="text-center"><?php echo $event["event_name"]; ?></h1>
+    <h1><?php echo $event["event_name"]; ?></h1>
     <div class="row justify-content-between mb-3">
         <div class="col-md-4">
             <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?> <a href="#user" data-bs-toggle="modal">Switch User</a></div>
