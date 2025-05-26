@@ -1,8 +1,4 @@
 $(document).ready(function () {
-    let isDragging = false;
-    let isSelecting = false;
-    let eventId = null;
-
     // Check if there's an event ID in the URL
     const urlParams = new URLSearchParams(window.location.search);
     eventId = urlParams.get('event');
@@ -32,7 +28,8 @@ $(document).ready(function () {
         "endTime": formatHour(localEndDate)     // Use localEndDate
     };
 
-    // console.log(result); // Commented out
+    document.getElementById('event-meta').innerHTML += '<b>Start Date: </b>' + result.startDate + ' <b>End Date:</b> ' + result.endDate + ' <b>Start Time:</b> ' + result.startTime + ' <b>End Time:</b> ' + result.endTime;
+    //console.log(result);
 
     //generateCalendarGrid("2025-05-19", "2025-05-26", "17", "22");
     generateCalendarGrid(result.startDate, result.endDate, result.startTime, result.endTime);
@@ -53,14 +50,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (copyButton) { // Ensure button exists before adding listener
         copyButton.addEventListener('click', function () {
             // Get URL from the custom attribute
-            const url = this.getAttribute('url-site');
+            const url = window.location.href;
 
             // Copy to clipboard using the modern Clipboard API
             navigator.clipboard.writeText(url)
                 .then(() => {
                     // Provide visual feedback
                     const originalContent = this.innerHTML;
-                    this.innerHTML = '<i class="bi-check"></i> Copied to clipboard!';
+                    this.innerHTML = 'Copied to clipboard!';
 
                     // Reset button after 2 seconds
                     setTimeout(() => {
