@@ -317,6 +317,11 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="gitlab-dast-validation" content="059797f5-753a-48b7-80a6-3de722cda1a5">
+    <link rel="shortcut icon" href="https://cdn.quickbrownfoxes.org/originalsq%2032.png" />
+    <meta property="og:image" content="https://cdn.quickbrownfoxes.org/originalsq%2032.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Event scheduler" />
+    <meta property="og:description" content="Easy to use, mobile friendly event scheduler for groups!" />
     <title><?php echo $event["event_name"]; ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/themes/base/theme.min.css" integrity="sha512-lfR3NT1DltR5o7HyoeYWngQbo6Ec4ITaZuIw6oAxIiCNYu22U5kpwHy9wAaN0vvBj3U6Uy2NNtAfiaKcDxfhTg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
