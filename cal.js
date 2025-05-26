@@ -41,7 +41,7 @@ $(document).ready(function () {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('#calendar-grid .calendar-cell[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl, {
-            boundary: document.body, 
+            boundary: document.body,
             fallbackPlacements: ['top', 'bottom', 'left', 'right']
         });
     });
@@ -172,7 +172,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         // For `dateStr`, we want the specific YYYY-MM-DD for the current day in the loop (local)
         const pad = n => String(n).padStart(2, '0'); // Ensure pad is available or define locally
         const dateStr = `${currentDate.getFullYear()}-${pad(currentDate.getMonth() + 1)}-${pad(currentDate.getDate())}`;
-        
+
         const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][currentDate.getDay()];
         const dayNum = currentDate.getDate();
         const monthNum = currentDate.getMonth() + 1; // getMonth() is 0-indexed
@@ -180,7 +180,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         // const dateStr = currentDate.toISOString().split('T')[0]; // This would be UTC, change to local
 
         let loopStartHour;
-        let inclusiveLoopEndHour; 
+        let inclusiveLoopEndHour;
 
         const dayCol = document.createElement('div');
         dayCol.className = 'day-col';
@@ -245,66 +245,61 @@ function setupCellInteractions() {
     const cells = document.querySelectorAll('#calendar-grid .calendar-cell');
     const selectedSlotsContainer = document.getElementById('selected-slots-container');
 
-    let isRectangleDragging = false;
-    let anchorCellData = null; // To store { date: string, hour: int }
-    let currentDragSelectMode = true; // true to select, false to deselect
-    let initialCellStates = new Map(); // To store initial selection state of all cells
+    let isMouseDown = false;
+    let hasDragged = false;
+    let anchorCellElement = null;
+    let anchorCellData = null;
+    let currentDragSelectMode = true;
+    let initialCellStates = new Map();
 
     cells.forEach(cell => {
         cell.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // Prevent default text selection
-            const tooltipInstance = bootstrap.Tooltip.getInstance(cell);
-            if (tooltipInstance) {
-                tooltipInstance.hide();
-            }
-
-            isRectangleDragging = true;
+            e.preventDefault();
+            isMouseDown = true;
+            hasDragged = false;
+            anchorCellElement = cell;
             anchorCellData = { date: cell.dataset.date, hour: parseInt(cell.dataset.hour) };
             currentDragSelectMode = !cell.classList.contains('selected');
-            
+
             initialCellStates.clear();
             document.querySelectorAll('#calendar-grid .calendar-cell').forEach(c => {
                 initialCellStates.set(c.dataset.date + '_' + c.dataset.hour, c.classList.contains('selected'));
             });
 
-            // Apply to the anchor cell immediately as part of a 1x1 rectangle
-            // This logic is now effectively handled by the first mousemove trigger,
-            // or can be explicitly called here if mousemove is not guaranteed on mousedown.
-            // For simplicity, we'll rely on mousemove to handle the anchor cell as well.
-            // If mousemove isn't triggered for the anchor cell itself without movement,
-            // we might need to manually trigger a highlight update for the anchor.
-            // However, most browsers will trigger mousemove if mouse is down and over element.
+            const tooltipInstance = bootstrap.Tooltip.getInstance(anchorCellElement);
+            if (tooltipInstance) {
+                tooltipInstance.hide();
+            }
         });
     });
 
     calendarGrid.addEventListener('mousemove', (e) => {
-        if (!isRectangleDragging) return;
+        if (!isMouseDown) return;
+        hasDragged = true; // Set if mouse is down and moving
 
+        // Rectangle selection logic (from previous implementation, adapted for new state vars)
         const currentHoverCell = e.target.closest('.calendar-cell');
-        if (!currentHoverCell) return; // Only proceed if definitely over a cell
+        if (!currentHoverCell) return;
 
         const currentHoverDate = currentHoverCell.dataset.date;
         const currentHoverHour = parseInt(currentHoverCell.dataset.hour);
 
-        // Determine rectangle boundaries
         const minDate = (anchorCellData.date < currentHoverDate) ? anchorCellData.date : currentHoverDate;
         const maxDate = (anchorCellData.date > currentHoverDate) ? anchorCellData.date : currentHoverDate;
         const minHour = (anchorCellData.hour < currentHoverHour) ? anchorCellData.hour : currentHoverHour;
         const maxHour = (anchorCellData.hour > currentHoverHour) ? anchorCellData.hour : currentHoverHour;
-        
+
         document.querySelectorAll('#calendar-grid .calendar-cell').forEach(cellToUpdate => {
             const cellDate = cellToUpdate.dataset.date;
             const cellHour = parseInt(cellToUpdate.dataset.hour);
             const cellKey = cellDate + '_' + cellHour;
-            
-            // Convert cell's local date/hour to UTC for hidden input value
-            let tempDate = new Date(cellDate.substring(0,4), cellDate.substring(5,7)-1, cellDate.substring(8,10), cellHour);
+
+            let tempDate = new Date(cellDate.substring(0, 4), cellDate.substring(5, 7) - 1, cellDate.substring(8, 10), cellHour);
             const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
             const inputId = 'slot_' + slotValueUTC;
 
             if (cellDate >= minDate && cellDate <= maxDate && cellHour >= minHour && cellHour <= maxHour) {
-                // Cell is IN the rectangle
-                if (currentDragSelectMode) { // We are selecting
+                if (currentDragSelectMode) {
                     cellToUpdate.classList.add('selected');
                     if (!document.getElementById(inputId)) {
                         const hiddenInput = document.createElement('input');
@@ -314,7 +309,7 @@ function setupCellInteractions() {
                         hiddenInput.id = inputId;
                         selectedSlotsContainer.appendChild(hiddenInput);
                     }
-                } else { // We are deselecting
+                } else {
                     cellToUpdate.classList.remove('selected');
                     const existingInput = document.getElementById(inputId);
                     if (existingInput) {
@@ -322,7 +317,6 @@ function setupCellInteractions() {
                     }
                 }
             } else {
-                // Cell is OUTSIDE the rectangle - revert to initial state
                 const initialStateSelected = initialCellStates.get(cellKey);
                 if (initialStateSelected) {
                     cellToUpdate.classList.add('selected');
@@ -346,10 +340,37 @@ function setupCellInteractions() {
     });
 
     document.addEventListener('mouseup', () => {
-        if (isRectangleDragging) {
-            isRectangleDragging = false;
-            anchorCellData = null;
-            initialCellStates.clear(); // Clear the stored states
+        if (!isMouseDown) return;
+
+        if (!hasDragged && anchorCellElement) {
+            const cellToToggle = anchorCellElement;
+            let tempDate = new Date(anchorCellData.date.substring(0, 4), anchorCellData.date.substring(5, 7) - 1, anchorCellData.date.substring(8, 10), anchorCellData.hour);
+            const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
+            const inputId = 'slot_' + slotValueUTC;
+
+            if (currentDragSelectMode) {
+                cellToToggle.classList.add('selected');
+                if (!document.getElementById(inputId)) {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'selected_slots[]';
+                    hiddenInput.value = slotValueUTC;
+                    hiddenInput.id = inputId;
+                    selectedSlotsContainer.appendChild(hiddenInput);
+                }
+            } else {
+                cellToToggle.classList.remove('selected');
+                const existingInput = document.getElementById(inputId);
+                if (existingInput) {
+                    selectedSlotsContainer.removeChild(existingInput);
+                }
+            }
         }
+
+        isMouseDown = false;
+        hasDragged = false;
+        anchorCellElement = null;
+        anchorCellData = null;
+        initialCellStates.clear();
     });
 }
