@@ -139,12 +139,12 @@
                                 <input type="date" class="form-control" id="end-date" required>
                             </div>
                             <div class="col-md mb-3">
-                                <label for="start-time" class="form-label">Start Time (24hr Time)</label>
-                                <input type="text" class="form-control" id="start-time" maxlength="2" required>
+                                <label for="start-time" class="form-label">Start Time</label>
+                                <select class="form-control" id="start-time" required></select>
                             </div>
                             <div class="col-md mb-3">
-                                <label for="end-time" class="form-label">End Time (24hr Time)</label>
-                                <input type="text" class="form-control" id="end-time" maxlength="2" required>
+                                <label for="end-time" class="form-label">End Time</label>
+                                <select class="form-control" id="end-time" required></select>
                             </div>
                         </div>
                         <input type="hidden" name="uniqueid" id="uniqueid">
@@ -202,6 +202,33 @@
                 select.value = userTimeZone;
             }
 
+            const timeSelects = document.querySelectorAll('select[id$="-time"]');
+
+            function populateHours(selectElement) {
+                for (let i = 0; i < 24; i++) {
+                    const hour24 = i.toString().padStart(2, '0');
+                    // Convert to 12-hour format
+                    let hour12 = i;
+                    let ampm = 'AM';
+                    if (i === 0) {
+                        hour12 = 12;
+                    } else if (i === 12) {
+                        hour12 = 12;
+                        ampm = 'PM';
+                    } else if (i > 12) {
+                        hour12 = i - 12;
+                        ampm = 'PM';
+                    }
+                    const option = document.createElement('option');
+                    option.value = i; // Value is 0-23
+                    option.textContent = `${hour24}:00 / ${hour12}${ampm}`; // Display format
+                    selectElement.appendChild(option);
+                }
+            }
+
+            // Populate all time selects
+            timeSelects.forEach(select => populateHours(select));
+
             // 1. Conversion function
             function updateUTCFields() {
                 const startDate = document.getElementById('start-date').value;
@@ -242,7 +269,7 @@
                     dateError.style.display = 'none';
                     submitBtn.disabled = false;
                 }
-                if (startTime === endTime || !Number.isInteger(startTime) || !Number.isInteger(endTime) || startTime > 23 || endTime > 23 || startTime < 0 || endTime < 0 ) {
+                if (startTime === endTime || !Number.isInteger(startTime) || !Number.isInteger(endTime) || startTime > 23 || endTime > 23 || startTime < 0 || endTime < 0) {
                     timeError.style.display = 'block';
                     submitBtn.disabled = true;
                 } else {
