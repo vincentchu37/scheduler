@@ -328,6 +328,10 @@ try {
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }
+// Sanitize event fields before outputting to JSON
+if ($event) {
+    $event['event_name'] = htmlspecialchars($event['event_name'], ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <!DOCTYPE html>
@@ -349,6 +353,7 @@ try {
     <script>
         // Make $_POST data available as a global JavaScript object
         <?php
+        // Sanitize event fields before outputting to JSON
         echo 'var data = ' . json_encode($event) . ';';
         echo 'var userAvailability = ' . json_encode($userAvailability) . ';';
         echo 'var perSlotAvailabilityPercentages = ' . json_encode($perSlotAvailabilityPercentages) . ';';

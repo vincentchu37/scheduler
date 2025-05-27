@@ -242,7 +242,7 @@
                     dateError.style.display = 'none';
                     submitBtn.disabled = false;
                 }
-                if (startTime === endTime || !Number.isInteger(startTime) || !Number.isInteger(endTime)) {
+                if (startTime === endTime || !Number.isInteger(startTime) || !Number.isInteger(endTime) || startTime > 23 || endTime > 23 || startTime < 0 || endTime < 0 ) {
                     timeError.style.display = 'block';
                     submitBtn.disabled = true;
                 } else {
