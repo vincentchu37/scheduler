@@ -156,15 +156,25 @@
                         <div id="time-error" class="alert alert-danger mt-2" style="display: none;">
                             Start/End <b>time</b> is not valid.
                         </div>
+                        <strong>Events only stored for 90 days after their end date! </strong>
                         <button type="submit" id="submit" class="btn btn-primary float-end">Create Event</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
-    <div class="text-center">
-        <strong>Events only stored for 90 days after their end date! </strong><br />
-        <strong><a href="https://gitlab.com/quickbrownfoxes/scheduler">Gitlab Source Code</a></strong>
+    <div class="container">
+        <h4>Legend</h4>
+        <ul>
+            <li>Gray Rectangle (Time Block): Means that time block is out of the event's time range</li>
+            <li>Green fill inside time block: % of people available (more green = more people available)</li>
+            <li>Light blue: Weekends</li>
+            <li>Black Box around time block: Means you've marked yourself available for that time block</li>
+            <li>Blue or Yellow button that says <b>In Select Mode</b> or <b>In Read-Only Mode</b>: This button is a toggle for mobile users. Use read-only mode to see the availablilty per time block and select mode to select time blocks.</li>
+        </ul>
+    </div>
+    <div class="text-center mb-3">
+        <strong><a href="https://gitlab.com/quickbrownfoxes/scheduler">Source Code</a></strong>
     </div>
     <div class="modal fade" id="noevent" tabindex="-1" role="dialog" aria-labelledby="noevent" aria-hidden="true">
         <div class="modal-dialog" role="document">
