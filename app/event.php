@@ -187,12 +187,10 @@ try {
 
     if (!$event) {
         if (empty($_POST)) {
-            echo "No event with this ID.";
             header('Location: .#noevent');
             die;
         }
         if (!ctype_digit($_POST['start-datetime-utc']) || !ctype_digit($_POST['end-datetime-utc'])) {
-            echo "Invalid start or end time.";
             header('Location: .#noevent');
             die;
         }
