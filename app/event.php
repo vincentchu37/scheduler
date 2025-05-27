@@ -126,7 +126,7 @@ try {
         if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
             die('CSRF token validation failed');
         }
-        $trimUser = trim($_POST['user']);
+        $trimUser = strtolower(trim($_POST['user']));
         $truncUser = mb_substr($trimUser, 0, 32, 'UTF-8');
         $newUser = $truncUser;
         $_SESSION['user_' . $_GET['id']] = $newUser;
@@ -376,7 +376,7 @@ if ($event) {
             <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?><br /> <a href="#user" data-bs-toggle="modal">Switch User</a></div>
         </div>
         <div class="col-md-2 mb-2">
-            <a href="#"><button type="button" class="btn btn-warning" id="toggle-select-mode">Enter Read-Only Mode</button></a>
+            <a href="#"><button type="button" class="btn btn-info" id="toggle-select-mode">In Select Mode</button></a>
         </div>
         <div class="col-md-6 d-flex justify-content-end gap-2">
             <a href="."><button type="button" class="btn btn-outline-primary">New Event</button></a>
@@ -400,7 +400,7 @@ if ($event) {
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="userModalLabel">Who are you?</h5>
+                <h5 class="modal-title" id="userModalLabel">Who are you? (Case insensitive)</h5>
             </div>
             <div class="modal-body">
                 <form id="changeuser" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">

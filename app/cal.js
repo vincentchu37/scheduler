@@ -51,13 +51,13 @@ $(document).ready(function () {
         toggleModeButton.addEventListener('click', function() {
             isSelectMode = !isSelectMode;
             if (isSelectMode) {
-                this.textContent = 'Enter Read-Only Mode';
+                this.textContent = 'In Select Mode';
+                this.classList.add('btn-info');
+                this.classList.remove('btn-warning');
+            } else {
+                this.textContent = 'In Read-Only Mode';
                 this.classList.remove('btn-info');
                 this.classList.add('btn-warning');
-            } else {
-                this.textContent = 'Enter Select Mode';
-                this.classList.remove('btn-warning');
-                this.classList.add('btn-info');
                 // Note: Accessing isMouseDown from setupCellInteractions' scope directly here is tricky.
                 // Relying on user releasing mouse/touch for now.
             }
