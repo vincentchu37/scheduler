@@ -6,6 +6,7 @@
   overflow-x: auto;
   position: relative;
   border-collapse: collapse;
+  margin-bottom: 3rem;
 }
 .time-column {
     grid-row-start: auto;
@@ -56,6 +57,7 @@
 @media (max-width: 768px) {
   .calendar-grid {
     grid-template-columns: 70px repeat(auto-fill, minmax(60px, 1fr));
+    margin-right: 3rem;
   }
 }
 
