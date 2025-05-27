@@ -1,3 +1,6 @@
+let eventId; // Declare eventId here to make it accessible if needed more globally
+let isSelectMode = true; // Global state for select mode
+
 $(document).ready(function () {
     // Check if there's an event ID in the URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -42,6 +45,31 @@ $(document).ready(function () {
             fallbackPlacements: ['top', 'bottom', 'left', 'right']
         });
     });
+
+    const toggleModeButton = document.getElementById('toggle-select-mode');
+    if (toggleModeButton) {
+        toggleModeButton.addEventListener('click', function() {
+            isSelectMode = !isSelectMode;
+            if (isSelectMode) {
+                this.textContent = 'Enter Read-Only Mode';
+                this.classList.remove('btn-info');
+                this.classList.add('btn-warning');
+            } else {
+                this.textContent = 'Enter Select Mode';
+                this.classList.remove('btn-warning');
+                this.classList.add('btn-info');
+                // Note: Accessing isMouseDown from setupCellInteractions' scope directly here is tricky.
+                // Relying on user releasing mouse/touch for now.
+            }
+            // Hide any visible tooltips when switching modes
+            document.querySelectorAll('#calendar-grid .calendar-cell').forEach(cell => {
+                const tooltipInstance = bootstrap.Tooltip.getInstance(cell);
+                if (tooltipInstance) {
+                    tooltipInstance.hide();
+                }
+            });
+        });
+    }
 });
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -283,13 +311,36 @@ function setupCellInteractions() {
     }
 
     function handleDragStart(cellElement, event) {
+        if (!isSelectMode) {
+            // Read-only mode: Show tooltip and prevent selection
+
+            // Hide all other visible tooltips
+            document.querySelectorAll('#calendar-grid .calendar-cell').forEach(anyCell => {
+                const anyTooltipInstance = bootstrap.Tooltip.getInstance(anyCell);
+                if (anyTooltipInstance) {
+                    anyTooltipInstance.hide();
+                }
+            });
+
+            // Show the tooltip for the clicked cell
+            const tooltipInstance = bootstrap.Tooltip.getInstance(cellElement);
+            if (tooltipInstance) {
+                tooltipInstance.show();
+            }
+            // isMouseDown remains false (its default or from previous state), so drag won't start.
+            event.preventDefault(); // Prevent default actions like text selection
+            return; // Exit before setting isMouseDown = true or other drag-related logic
+        }
+
+        // Original logic for select mode starts here
         if (cellElement.classList.contains('disabled-event-slot')) {
-            isMouseDown = false; // Ensure no drag operation starts or continues
+            // isMouseDown = false; // This needs to be isMouseDown declared in the outer scope of setupCellInteractions
+            // This will be handled by the fact that we return before isMouseDown is set to true if not in select mode
             event.preventDefault(); // Prevent any default action like text selection
             return; // Exit the function early, do not process click/drag on disabled slot
         }
         event.preventDefault();
-        isMouseDown = true;
+        isMouseDown = true; // This is the isMouseDown from setupCellInteractions' scope
         hasDragged = false;
         anchorCellElement = cellElement;
         anchorCellData = { date: cellElement.dataset.date, hour: parseInt(cellElement.dataset.hour) };

@@ -371,9 +371,12 @@ if ($event) {
             <div id="event-meta"></div>
         </div>
     </div>
-    <div class="row justify-content-between mb-3">
+    <div class="row justify-content-between">
         <div class="col-md-4">
             <div class="h6 mt-2">Current User: <?php echo htmlspecialchars($currentUser); ?><br /> <a href="#user" data-bs-toggle="modal">Switch User</a></div>
+        </div>
+        <div class="col-md-2 mb-2">
+            <a href="#"><button type="button" class="btn btn-warning" id="toggle-select-mode">Enter Read-Only Mode</button></a>
         </div>
         <div class="col-md-6 d-flex justify-content-end gap-2">
             <a href="."><button type="button" class="btn btn-outline-primary">New Event</button></a>
