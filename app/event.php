@@ -114,7 +114,6 @@ try {
     // The check for $_GET['id'] is important for normal operation.
     // It should not conflict with the cleanup logic as cleanup doesn't rely on $_GET['id'] and doesn't echo/exit.
     if (!isset($_GET['id'])) {
-        echo "Event ID is required to display an event page.";
         header('Location: .#noevent');
         exit;
     }
