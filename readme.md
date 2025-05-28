@@ -8,6 +8,8 @@ Try it here:
 
 https://scheduler.quickbrownfoxes.org/
 
+![screnshot](image.png)
+
 ### Docker deployment
 you'll first need to `touch /home/vincent/scheduler/events.db` and `chown 1000:1000 events.db`
 ```
