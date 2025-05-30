@@ -1,23 +1,328 @@
 let eventId; // Declare eventId here to make it accessible if needed more globally
 let isSelectMode = true; // Global state for select mode
+let csrfToken = '';
+let saveButton = null;
+let originalSaveButtonHTML = ''; // To store the initial HTML of the save button
+
+let pollingIntervalId = null;
+const POLLING_INTERVAL_MS = 15000; // 15 seconds
+
+// Utility function to pad numbers for date/time formatting
+const pad = n => String(n).padStart(2, '0');
+
+// Debounce function
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+// Function to handle the auto-save logic
+function initiateAutoSave() {
+    if (!saveButton) {
+        console.warn('Save button not found for auto-save feedback.');
+        return;
+    }
+    if (originalSaveButtonHTML === '') { // Store original HTML only once
+        originalSaveButtonHTML = saveButton.innerHTML;
+    }
+
+    saveButton.innerHTML = 'Saving...';
+    saveButton.classList.remove('btn-success', 'btn-danger', 'btn-primary');
+    saveButton.classList.add('btn-info'); // Blue for saving
+
+    const selectedSlotsContainer = document.getElementById('selected-slots-container');
+    const selectedSlotInputs = selectedSlotsContainer.querySelectorAll('input[name="selected_slots[]"]');
+    const selectedSlots = Array.from(selectedSlotInputs).map(input => input.value);
+
+    if (!window.eventAppData || !window.eventAppData.event || !window.eventAppData.event.uniqueid) {
+        console.error('Cannot auto-save: event uniqueid not found in window.eventAppData.');
+        saveButton.innerHTML = 'Save Error!';
+        saveButton.classList.remove('btn-info', 'btn-success', 'btn-primary');
+        saveButton.classList.add('btn-danger');
+        setTimeout(() => { 
+            if (saveButton.innerHTML === 'Save Error!') {
+                saveButton.innerHTML = originalSaveButtonHTML; 
+                saveButton.className = 'btn btn-success'; 
+            }
+        }, 3000);
+        return;
+    }
+    const currentEventId = window.eventAppData.event.uniqueid;
+    // The '!currentEventId' check below is now redundant due to the comprehensive check above but kept for safety.
+
+    if (!currentEventId) { 
+        console.error('Event ID not found for auto-save (from eventAppData).');
+        saveButton.innerHTML = 'Save Error!';
+        saveButton.classList.remove('btn-info');
+        saveButton.classList.add('btn-danger');
+        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success';}, 3000);
+        return;
+    }
+    if (!csrfToken) {
+        console.error('CSRF token not available for auto-save.');
+        saveButton.innerHTML = 'Save Error!';
+        saveButton.classList.remove('btn-info');
+        saveButton.classList.add('btn-danger');
+        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success'; }, 3000);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('form_action', 'save_availability');
+    formData.append('csrf_token', csrfToken);
+    selectedSlots.forEach(slot => {
+        formData.append('selected_slots[]', slot);
+    });
+
+    fetch(`?id=${currentEventId}`, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) { // Check for HTTP error status (4xx, 5xx)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(result => {
+        if (result.status === 'success') {
+            saveButton.innerHTML = 'Saved ✔';
+            saveButton.classList.remove('btn-info');
+            saveButton.classList.add('btn-success'); // Green for saved
+            
+            fetchAndUpdateAggregateData(); // Update aggregate view for active user
+
+            setTimeout(() => {
+                if (saveButton.innerHTML === 'Saved ✔') {
+                     saveButton.innerHTML = originalSaveButtonHTML;
+                     saveButton.className = 'btn btn-success'; // Revert to original class
+                }
+            }, 2000);
+        } else {
+            saveButton.innerHTML = 'Save Failed!';
+            saveButton.classList.remove('btn-info');
+            saveButton.classList.add('btn-danger'); // Red for failed
+            console.error('Auto-save failed:', result.message);
+            // alert(`Auto-save failed: ${result.message}`); // Optional: more prominent error
+            setTimeout(() => {
+                if (saveButton.innerHTML === 'Save Failed!') {
+                    saveButton.innerHTML = originalSaveButtonHTML;
+                    saveButton.className = 'btn btn-success';
+                }
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        saveButton.innerHTML = 'Save Error!';
+        saveButton.classList.remove('btn-info');
+        saveButton.classList.add('btn-danger');
+        console.error('Auto-save request error:', error);
+        setTimeout(() => {
+            if (saveButton.innerHTML === 'Save Error!') {
+                saveButton.innerHTML = originalSaveButtonHTML;
+                saveButton.className = 'btn btn-success';
+            }
+        }, 3000);
+    });
+}
+
+// Create a debounced version of the auto-save function
+const debouncedAutoSave = debounce(initiateAutoSave, 1000); // 1.5 seconds
+
+
+// --- Aggregate Data Polling Functions ---
+function startPollingAggregateData() {
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+        pollingIntervalId = null;
+    }
+
+    if (document.hidden) {
+        return;
+    }
+
+    fetchAndUpdateAggregateData(); // Initial fetch when starting/resuming
+    pollingIntervalId = setInterval(fetchAndUpdateAggregateData, POLLING_INTERVAL_MS);
+}
+
+function stopPollingAggregateData() {
+    if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+        pollingIntervalId = null;
+    }
+}
+// --- End of Aggregate Data Polling Functions ---
+
+
+// Function to fetch and update aggregate availability data
+function fetchAndUpdateAggregateData() {
+    if (!window.eventAppData || !window.eventAppData.event || !window.eventAppData.event.uniqueid) {
+        console.error('Cannot fetch aggregate data: event uniqueid not found in window.eventAppData.');
+        return;
+    }
+    const currentEventId = window.eventAppData.event.uniqueid;
+    // The check '!currentEventId' below is somewhat redundant now but harmless.
+
+    fetch(`?id=${currentEventId}&action=get_aggregate_data`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error fetching aggregate data! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.status === 'success') {
+                updateAggregateDisplay(result.perSlotAvailabilityPercentages, result.slotUserDetails);
+            } else {
+                console.error('Failed to fetch or process aggregate data:', result.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error during fetchAndUpdateAggregateData:', error);
+        });
+}
+
+// Function to update the display of aggregate availability (fills and tooltips)
+function updateAggregateDisplay(newPercentages, newUserDetails) {
+    const cells = document.querySelectorAll('#calendar-grid .calendar-cell');
+    cells.forEach(cell => {
+        if (cell.classList.contains('disabled-event-slot')) {
+            // Skip disabled cells as they don't show aggregate data in the same way
+            // Or, ensure their aggregate display is explicitly zeroed if necessary
+            const aggregateFill = cell.querySelector('.aggregate-availability');
+            if (aggregateFill) {
+                aggregateFill.style.width = '0%';
+            }
+            // Tooltips on disabled cells might not exist or need specific handling if they do
+            return; 
+        }
+
+        const localCellDateStr = cell.dataset.date; // e.g., "2023-12-25"
+        const localCellHour = parseInt(cell.dataset.hour); // e.g., 14
+
+        const year = parseInt(localCellDateStr.substring(0, 4));
+        const month = parseInt(localCellDateStr.substring(5, 7)) - 1; // JS months 0-indexed
+        const day = parseInt(localCellDateStr.substring(8, 10));
+        
+        let tempDate = new Date(Date.UTC(year, month, day, localCellHour)); // Treat input as UTC to get correct UTC base
+        // Correction: The date parts from cell.dataset.date are LOCAL.
+        // We need to create a local date object then get its UTC components.
+        tempDate = new Date(year, month, day, localCellHour);
+
+        const slotKeyUTC = tempDate.getUTCFullYear() + '-' +
+                           String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                           String(tempDate.getUTCDate()).padStart(2, '0') + '_' +
+                           tempDate.getUTCHours();
+
+        // Update Aggregate Fill
+        const aggregateFill = cell.querySelector('.aggregate-availability');
+        if (aggregateFill) {
+            const aggPercent = newPercentages[slotKeyUTC] || 0;
+            aggregateFill.style.width = aggPercent + '%';
+        }
+
+        // Update Tooltip Content
+        let newTooltipContentString = 'No availability data for this slot.'; // Default
+        if (newUserDetails && newUserDetails[slotKeyUTC]) {
+            const details = newUserDetails[slotKeyUTC];
+            newTooltipContentString = ''; // Reset for building
+            if (details.available && details.available.length > 0) {
+                newTooltipContentString += `<strong>Available:</strong> ${details.available.join(', ')}<hr>`;
+            } else {
+                newTooltipContentString += '<strong>Available:</strong><hr>';
+            }
+            if (details.unavailable && details.unavailable.length > 0) {
+                newTooltipContentString += `<strong class="text-danger">Unavailable:</strong> ${details.unavailable.join(', ')}`;
+            } else {
+                newTooltipContentString += '<strong class="text-danger">Unavailable:</strong>';
+            }
+        }
+        
+        cell.setAttribute('data-bs-title', newTooltipContentString);
+        const tooltipInstance = bootstrap.Tooltip.getInstance(cell);
+        if (tooltipInstance) {
+            // Ensure the tooltip's content is updated.
+            // For Bootstrap 5, setContent is the way.
+            tooltipInstance.setContent({ '.tooltip-inner': newTooltipContentString });
+        }
+    });
+}
+
 
 $(document).ready(function () {
-    // Check if there's an event ID in the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    eventId = urlParams.get('event');
+    if (!window.eventAppData || !window.eventAppData.event) {
+        console.error("Critical: Event application data (window.eventAppData or eventAppData.event) not found!");
+        // Display a more prominent error to the user and halt further script execution.
+        document.body.innerHTML = '<div style="padding: 20px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: .25rem; margin: 20px;">Error: Application data is missing. Cannot load event. Please try reloading or contact support if the issue persists.</div>';
+        if (typeof stopPollingAggregateData === 'function') { // Check if function exists before calling
+             stopPollingAggregateData(); // Stop polling if it was somehow started or could start
+        }
+        return; // Halt execution of $(document).ready()
+    }
 
-    // console.log(data); // Commented out
-    const startUtc = data["start_datetime"];
-    const endUtc = data["end_datetime"];
+    // Initialize csrfToken from the global JS object
+    csrfToken = window.eventAppData.csrfToken;
+    if (!csrfToken) {
+        console.error('CSRF token not found in window.eventAppData! Auto-save and other POST actions might fail.');
+        // Depending on requirements, you might want to alert the user or disable save features.
+    }
+
+    // Initialize saveButton
+    saveButton = document.getElementById('save-availability');
+    if (saveButton) {
+        originalSaveButtonHTML = saveButton.innerHTML; // Store initial HTML
+    } else {
+        console.warn('Save button #save-availability not found.');
+    }
+
+    // Setup Page Visibility API listeners for polling
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopPollingAggregateData();
+        } else {
+            startPollingAggregateData();
+        }
+    });
+
+    // Initial start of polling when page loads and is visible
+    if (typeof startPollingAggregateData === 'function') startPollingAggregateData();
+
+
+    // Event ID from URL params (can be kept for reference or specific use cases if any)
+    const urlParams = new URLSearchParams(window.location.search);
+    // eventId is a global variable, assign if needed, or prefer window.eventAppData.event.uniqueid
+    eventId = urlParams.get('id'); 
+
+    // Use data from window.eventAppData
+    const currentEventDetails = window.eventAppData.event;
+    const initialUserAvailability = window.eventAppData.userAvailability; // To be passed to generateCalendarGrid
+    const initialPerSlotPercentages = window.eventAppData.perSlotAvailabilityPercentages; // To be passed
+    const initialSlotUserDetails = window.eventAppData.slotUserDetails; // To be passed
+
+    // Ensure essential event details are present for date calculations
+    if (!currentEventDetails.start_datetime || !currentEventDetails.end_datetime) {
+        console.error("Critical: Event start or end datetime is missing from eventAppData.");
+        document.body.innerHTML = '<div class="alert alert-danger text-center m-3">Error: Event date information is incomplete. Cannot load event schedule.</div>';
+        if (typeof stopPollingAggregateData === 'function') stopPollingAggregateData();
+        return; // Halt further processing in ready()
+    }
+
+    const startUtc = currentEventDetails.start_datetime;
+    const endUtc = currentEventDetails.end_datetime;
 
     // Create Date objects (in local timezone)
     const localStartDate = new Date(startUtc);
     const localEndDate = new Date(endUtc);
 
-    // Pad function for formatting dates and hours
-    const pad = n => String(n).padStart(2, '0');
-
-    // Format as YYYY-MM-DD using local date parts
+    // Format as YYYY-MM-DD using local date parts (uses global pad function)
     const formatDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
     // Get hour (2 digits) using local hours
@@ -32,10 +337,9 @@ $(document).ready(function () {
     };
 
     document.getElementById('event-meta').innerHTML += '<b>Start Date: </b>' + result.startDate + ' <b>End Date:</b> ' + result.endDate + ' <b>Start Time:</b> ' + result.startTime + ' <b>End Time:</b> ' + result.endTime;
-    //console.log(result);
 
-    //generateCalendarGrid("2025-05-19", "2025-05-26", "17", "22");
-    generateCalendarGrid(result.startDate, result.endDate, result.startTime, result.endTime);
+    generateCalendarGrid(result.startDate, result.endDate, result.startTime, result.endTime,
+                         initialPerSlotPercentages, initialSlotUserDetails, initialUserAvailability);
 
     // Initialize Bootstrap Tooltips after calendar grid is generated
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('#calendar-grid .calendar-cell[data-bs-toggle="tooltip"]'));
@@ -121,7 +425,7 @@ function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlots
     const utcMonth = slotDateTimeLocal.getUTCMonth() + 1; // getUTCMonth is 0-indexed
     const utcDay = slotDateTimeLocal.getUTCDate();
     const utcHour = slotDateTimeLocal.getUTCHours(); // Integer 0-23
-    const pad = n => String(n).padStart(2, '0'); // Ensure pad is available
+    // Uses global pad function now
     const utcDateStr = `${utcYear}-${pad(utcMonth)}-${pad(utcDay)}`;
     const slotKeyUTC = `${utcDateStr}_${utcHour}`; // UTC key for slotUserDetails and perSlotAvailabilityPercentages
 
@@ -177,7 +481,8 @@ function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlots
 }
 
 
-function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHourStrLocal, eventEndHourStrLocal) {
+function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHourStrLocal, eventEndHourStrLocal, 
+                              currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability) {
     const calendarGrid = document.getElementById('calendar-grid');
     calendarGrid.innerHTML = ''; // Clear existing grid
     const gridDiv = document.createElement('div');
@@ -202,7 +507,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         currentDate.setDate(currentDate.getDate() + i); // Iterate day by day
 
         // For `dateStr`, we want the specific YYYY-MM-DD for the current day in the loop (local)
-        const pad = n => String(n).padStart(2, '0'); // Ensure pad is available or define locally
+        // Uses global pad function now
         const dateStr = `${currentDate.getFullYear()}-${pad(currentDate.getMonth() + 1)}-${pad(currentDate.getDate())}`;
 
         const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][currentDate.getDay()];
@@ -237,7 +542,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
                 if (isFirstDay) {
                     isCellSchedulable = false; // Early hours on first day are not schedulable
                 }
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isCellSchedulable);
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability, isCellSchedulable);
                 dayCol.appendChild(cell);
             }
 
@@ -252,7 +557,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
                 if (isLastDay) {
                     isCellSchedulable = false; // Late hours on last day are not schedulable
                 }
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isCellSchedulable);
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability, isCellSchedulable);
                 dayCol.appendChild(cell);
             }
         } else {
@@ -260,7 +565,7 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
             // Render as a single, continuous block
             for (let hour = eventStartHourLocal; hour <= eventEndHourLocal; hour++) {
                 // For non-spanning events, all rendered cells are schedulable
-                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, true);
+                const cell = createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability, true);
                 dayCol.appendChild(cell);
             }
         }
@@ -291,8 +596,12 @@ function setupCellInteractions() {
         const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
         const inputId = 'slot_' + slotValueUTC;
 
+        let changed = false;
         if (select) {
-            cellElement.classList.add('selected');
+            if (!cellElement.classList.contains('selected')) {
+                cellElement.classList.add('selected');
+                changed = true;
+            }
             if (!document.getElementById(inputId)) {
                 const hiddenInput = document.createElement('input');
                 hiddenInput.type = 'hidden';
@@ -300,13 +609,25 @@ function setupCellInteractions() {
                 hiddenInput.value = slotValueUTC;
                 hiddenInput.id = inputId;
                 selectedSlotsContainer.appendChild(hiddenInput);
+                // 'changed' is already true if class was added, or this is a new selection.
+                // If class was already there but input was missing, this is a correction, consider it a change.
+                if(!changed) changed = true; 
             }
         } else {
-            cellElement.classList.remove('selected');
+            if (cellElement.classList.contains('selected')) {
+                cellElement.classList.remove('selected');
+                changed = true;
+            }
             const existingInput = document.getElementById(inputId);
             if (existingInput) {
                 selectedSlotsContainer.removeChild(existingInput);
+                if(!changed) changed = true;
             }
+        }
+
+        if (changed) {
+            const event = new CustomEvent('availabilityChanged', { bubbles: true });
+            cellElement.dispatchEvent(event);
         }
     }
 
@@ -422,6 +743,14 @@ function setupCellInteractions() {
             handleDragStart(this, e); 
         });
     });
+
+    // Add event listener for custom 'availabilityChanged' event
+    const calendarGridForListener = document.getElementById('calendar-grid');
+    if (calendarGridForListener) {
+        calendarGridForListener.addEventListener('availabilityChanged', function(event) {
+            debouncedAutoSave();
+        });
+    }
 
     calendarGrid.addEventListener('mousemove', (e) => {
         // For mousemove, event.target is reliable if the listener is on calendarGrid
