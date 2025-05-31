@@ -13,7 +13,7 @@ const pad = n => String(n).padStart(2, '0');
 // Debounce function
 function debounce(func, delay) {
     let timeoutId;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
             func.apply(this, args);
@@ -44,10 +44,10 @@ function initiateAutoSave() {
         saveButton.innerHTML = 'Save Error!';
         saveButton.classList.remove('btn-info', 'btn-success', 'btn-primary');
         saveButton.classList.add('btn-danger');
-        setTimeout(() => { 
+        setTimeout(() => {
             if (saveButton.innerHTML === 'Save Error!') {
-                saveButton.innerHTML = originalSaveButtonHTML; 
-                saveButton.className = 'btn btn-success'; 
+                saveButton.innerHTML = originalSaveButtonHTML;
+                saveButton.className = 'btn btn-success';
             }
         }, 3000);
         return;
@@ -55,12 +55,12 @@ function initiateAutoSave() {
     const currentEventId = window.eventAppData.event.uniqueid;
     // The '!currentEventId' check below is now redundant due to the comprehensive check above but kept for safety.
 
-    if (!currentEventId) { 
+    if (!currentEventId) {
         console.error('Event ID not found for auto-save (from eventAppData).');
         saveButton.innerHTML = 'Save Error!';
         saveButton.classList.remove('btn-info');
         saveButton.classList.add('btn-danger');
-        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success';}, 3000);
+        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success'; }, 3000);
         return;
     }
     if (!csrfToken) {
@@ -86,52 +86,52 @@ function initiateAutoSave() {
         },
         body: formData
     })
-    .then(response => {
-        if (!response.ok) { // Check for HTTP error status (4xx, 5xx)
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(result => {
-        if (result.status === 'success') {
-            saveButton.innerHTML = 'Saved ✔';
-            saveButton.classList.remove('btn-info');
-            saveButton.classList.add('btn-success'); // Green for saved
-            
-            fetchAndUpdateAggregateData(); // Update aggregate view for active user
+        .then(response => {
+            if (!response.ok) { // Check for HTTP error status (4xx, 5xx)
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.status === 'success') {
+                saveButton.innerHTML = 'Saved ✔';
+                saveButton.classList.remove('btn-info');
+                saveButton.classList.add('btn-success'); // Green for saved
 
-            setTimeout(() => {
-                if (saveButton.innerHTML === 'Saved ✔') {
-                     saveButton.innerHTML = originalSaveButtonHTML;
-                     saveButton.className = 'btn btn-success'; // Revert to original class
-                }
-            }, 2000);
-        } else {
-            saveButton.innerHTML = 'Save Failed!';
+                fetchAndUpdateAggregateData(); // Update aggregate view for active user
+
+                setTimeout(() => {
+                    if (saveButton.innerHTML === 'Saved ✔') {
+                        saveButton.innerHTML = originalSaveButtonHTML;
+                        saveButton.className = 'btn btn-success'; // Revert to original class
+                    }
+                }, 2000);
+            } else {
+                saveButton.innerHTML = 'Save Failed!';
+                saveButton.classList.remove('btn-info');
+                saveButton.classList.add('btn-danger'); // Red for failed
+                console.error('Auto-save failed:', result.message);
+                // alert(`Auto-save failed: ${result.message}`); // Optional: more prominent error
+                setTimeout(() => {
+                    if (saveButton.innerHTML === 'Save Failed!') {
+                        saveButton.innerHTML = originalSaveButtonHTML;
+                        saveButton.className = 'btn btn-success';
+                    }
+                }, 3000);
+            }
+        })
+        .catch(error => {
+            saveButton.innerHTML = 'Save Error!';
             saveButton.classList.remove('btn-info');
-            saveButton.classList.add('btn-danger'); // Red for failed
-            console.error('Auto-save failed:', result.message);
-            // alert(`Auto-save failed: ${result.message}`); // Optional: more prominent error
+            saveButton.classList.add('btn-danger');
+            console.error('Auto-save request error:', error);
             setTimeout(() => {
-                if (saveButton.innerHTML === 'Save Failed!') {
+                if (saveButton.innerHTML === 'Save Error!') {
                     saveButton.innerHTML = originalSaveButtonHTML;
                     saveButton.className = 'btn btn-success';
                 }
             }, 3000);
-        }
-    })
-    .catch(error => {
-        saveButton.innerHTML = 'Save Error!';
-        saveButton.classList.remove('btn-info');
-        saveButton.classList.add('btn-danger');
-        console.error('Auto-save request error:', error);
-        setTimeout(() => {
-            if (saveButton.innerHTML === 'Save Error!') {
-                saveButton.innerHTML = originalSaveButtonHTML;
-                saveButton.className = 'btn btn-success';
-            }
-        }, 3000);
-    });
+        });
 }
 
 // Create a debounced version of the auto-save function
@@ -202,7 +202,7 @@ function updateAggregateDisplay(newPercentages, newUserDetails) {
                 aggregateFill.style.width = '0%';
             }
             // Tooltips on disabled cells might not exist or need specific handling if they do
-            return; 
+            return;
         }
 
         const localCellDateStr = cell.dataset.date; // e.g., "2023-12-25"
@@ -211,16 +211,16 @@ function updateAggregateDisplay(newPercentages, newUserDetails) {
         const year = parseInt(localCellDateStr.substring(0, 4));
         const month = parseInt(localCellDateStr.substring(5, 7)) - 1; // JS months 0-indexed
         const day = parseInt(localCellDateStr.substring(8, 10));
-        
+
         let tempDate = new Date(Date.UTC(year, month, day, localCellHour)); // Treat input as UTC to get correct UTC base
         // Correction: The date parts from cell.dataset.date are LOCAL.
         // We need to create a local date object then get its UTC components.
         tempDate = new Date(year, month, day, localCellHour);
 
         const slotKeyUTC = tempDate.getUTCFullYear() + '-' +
-                           String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' +
-                           String(tempDate.getUTCDate()).padStart(2, '0') + '_' +
-                           tempDate.getUTCHours();
+            String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' +
+            String(tempDate.getUTCDate()).padStart(2, '0') + '_' +
+            tempDate.getUTCHours();
 
         // Update Aggregate Fill
         const aggregateFill = cell.querySelector('.aggregate-availability');
@@ -245,7 +245,7 @@ function updateAggregateDisplay(newPercentages, newUserDetails) {
                 newTooltipContentString += '<strong class="text-danger">Unavailable:</strong>';
             }
         }
-        
+
         cell.setAttribute('data-bs-title', newTooltipContentString);
         const tooltipInstance = bootstrap.Tooltip.getInstance(cell);
         if (tooltipInstance) {
@@ -263,7 +263,7 @@ $(document).ready(function () {
         // Display a more prominent error to the user and halt further script execution.
         document.body.innerHTML = '<div style="padding: 20px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: .25rem; margin: 20px;">Error: Application data is missing. Cannot load event. Please try reloading or contact support if the issue persists.</div>';
         if (typeof stopPollingAggregateData === 'function') { // Check if function exists before calling
-             stopPollingAggregateData(); // Stop polling if it was somehow started or could start
+            stopPollingAggregateData(); // Stop polling if it was somehow started or could start
         }
         return; // Halt execution of $(document).ready()
     }
@@ -299,7 +299,7 @@ $(document).ready(function () {
     // Event ID from URL params (can be kept for reference or specific use cases if any)
     const urlParams = new URLSearchParams(window.location.search);
     // eventId is a global variable, assign if needed, or prefer window.eventAppData.event.uniqueid
-    eventId = urlParams.get('id'); 
+    eventId = urlParams.get('id');
 
     // Use data from window.eventAppData
     const currentEventDetails = window.eventAppData.event;
@@ -339,7 +339,7 @@ $(document).ready(function () {
     document.getElementById('event-meta').innerHTML += '<b>Start Date: </b>' + result.startDate + ' <b>End Date:</b> ' + result.endDate + ' <b>Start Time:</b> ' + result.startTime + ' <b>End Time:</b> ' + result.endTime;
 
     generateCalendarGrid(result.startDate, result.endDate, result.startTime, result.endTime,
-                         initialPerSlotPercentages, initialSlotUserDetails, initialUserAvailability);
+        initialPerSlotPercentages, initialSlotUserDetails, initialUserAvailability);
 
     // Initialize Bootstrap Tooltips after calendar grid is generated
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('#calendar-grid .calendar-cell[data-bs-toggle="tooltip"]'));
@@ -352,7 +352,7 @@ $(document).ready(function () {
 
     const toggleModeButton = document.getElementById('toggle-select-mode');
     if (toggleModeButton) {
-        toggleModeButton.addEventListener('click', function() {
+        toggleModeButton.addEventListener('click', function () {
             isSelectMode = !isSelectMode;
             if (isSelectMode) {
                 this.textContent = 'In Select Mode';
@@ -407,9 +407,9 @@ document.addEventListener('DOMContentLoaded', function () {
 function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlotsContainer, perSlotAvailabilityPercentages, slotUserDetails, userAvailability, isActuallySchedulable) {
     const cell = document.createElement('div');
     cell.className = `calendar-cell ${isWeekend ? 'weekend' : ''}`;
-    
+
     if (!isActuallySchedulable) {
-        cell.classList.add('disabled-event-slot','disabled');
+        cell.classList.add('disabled-event-slot', 'disabled');
     }
 
     cell.dataset.date = dateStr; // dateStr is local
@@ -481,8 +481,8 @@ function createCalendarCell(dateStr, hour, isWeekend, currentDate, selectedSlots
 }
 
 
-function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHourStrLocal, eventEndHourStrLocal, 
-                              currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability) {
+function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHourStrLocal, eventEndHourStrLocal,
+    currentPerSlotPercentages, currentSlotUserDetails, currentUserAvailability) {
     const calendarGrid = document.getElementById('calendar-grid');
     calendarGrid.innerHTML = ''; // Clear existing grid
     const gridDiv = document.createElement('div');
@@ -528,13 +528,13 @@ function generateCalendarGrid(eventStartDateStr, eventEndDateStr, eventStartHour
         const isFirstDay = currentDate.toDateString() === localEventStartDate.toDateString(); // Retained for potential future use, but not used in current simplified logic
         const isLastDay = currentDate.toDateString() === localEventEndDate.toDateString();   // Retained for potential future use, but not used in current simplified logic
         const isMiddleDay = !isFirstDay && !isLastDay; // Retained for potential future use, but not used in current simplified logic
-        
+
         // Inside the loop for each currentDate / dayCol:
 
         // Redundant declarations of isFirstDay and isLastDay removed.
         // The isMiddleDay variable from the original block (around line 198) is used.
         // The commented-out isMiddleDay declaration below is also implicitly removed by this change.
-        
+
         if (isSpanningEvent) {
             // Render "early hours" block (0 to eventEndHourLocal)
             for (let hour = 0; hour <= eventEndHourLocal; hour++) {
@@ -592,7 +592,7 @@ function setupCellInteractions() {
             return; // Do not allow selection changes for disabled-event-slots
         }
         // Convert cell's local date/hour to UTC for hidden input value/ID
-        let tempDate = new Date(cellDate.substring(0,4), cellDate.substring(5,7)-1, cellDate.substring(8,10), cellHour);
+        let tempDate = new Date(cellDate.substring(0, 4), cellDate.substring(5, 7) - 1, cellDate.substring(8, 10), cellHour);
         const slotValueUTC = tempDate.getUTCFullYear() + '-' + String(tempDate.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tempDate.getUTCDate()).padStart(2, '0') + '_' + tempDate.getUTCHours();
         const inputId = 'slot_' + slotValueUTC;
 
@@ -611,7 +611,7 @@ function setupCellInteractions() {
                 selectedSlotsContainer.appendChild(hiddenInput);
                 // 'changed' is already true if class was added, or this is a new selection.
                 // If class was already there but input was missing, this is a correction, consider it a change.
-                if(!changed) changed = true; 
+                if (!changed) changed = true;
             }
         } else {
             if (cellElement.classList.contains('selected')) {
@@ -621,7 +621,7 @@ function setupCellInteractions() {
             const existingInput = document.getElementById(inputId);
             if (existingInput) {
                 selectedSlotsContainer.removeChild(existingInput);
-                if(!changed) changed = true;
+                if (!changed) changed = true;
             }
         }
 
@@ -666,7 +666,7 @@ function setupCellInteractions() {
         anchorCellElement = cellElement;
         anchorCellData = { date: cellElement.dataset.date, hour: parseInt(cellElement.dataset.hour) };
         currentDragSelectMode = !cellElement.classList.contains('selected');
-        
+
         initialCellStates.clear();
         document.querySelectorAll('#calendar-grid .calendar-cell').forEach(c => {
             initialCellStates.set(c.dataset.date + '_' + c.dataset.hour, c.classList.contains('selected'));
@@ -690,7 +690,7 @@ function setupCellInteractions() {
         if (currentHoverCell && !currentHoverCell.classList.contains('calendar-cell')) {
             currentHoverCell = currentHoverCell.closest('.calendar-cell');
         }
-        
+
         if (!currentHoverCell) return; // Not over a cell
 
         const currentHoverDate = currentHoverCell.dataset.date;
@@ -702,12 +702,12 @@ function setupCellInteractions() {
         const maxDate = (anchorCellData.date > currentHoverDate) ? anchorCellData.date : currentHoverDate;
         const minHour = (anchorCellData.hour < currentHoverHour) ? anchorCellData.hour : currentHoverHour;
         const maxHour = (anchorCellData.hour > currentHoverHour) ? anchorCellData.hour : currentHoverHour;
-        
+
         document.querySelectorAll('#calendar-grid .calendar-cell').forEach(cellToUpdate => {
             const cellDate = cellToUpdate.dataset.date;
             const cellHour = parseInt(cellToUpdate.dataset.hour);
             const cellKey = cellDate + '_' + cellHour;
-            
+
             if (cellDate >= minDate && cellDate <= maxDate && cellHour >= minHour && cellHour <= maxHour) {
                 // Cell is IN the rectangle
                 updateCellSelection(cellToUpdate, currentDragSelectMode, cellDate, cellHour);
@@ -722,11 +722,11 @@ function setupCellInteractions() {
     function handleDragEnd() {
         if (!isMouseDown) return;
 
-        if (!hasDragged && anchorCellElement) { 
-             // This was a click, not a drag
+        if (!hasDragged && anchorCellElement) {
+            // This was a click, not a drag
             updateCellSelection(anchorCellElement, currentDragSelectMode, anchorCellData.date, anchorCellData.hour);
         }
-        
+
         // Reset all state variables
         isMouseDown = false;
         hasDragged = false;
@@ -737,17 +737,17 @@ function setupCellInteractions() {
 
     cells.forEach(cell => {
         cell.addEventListener('mousedown', (e) => handleDragStart(cell, e));
-        cell.addEventListener('touchstart', function(e) {
+        cell.addEventListener('touchstart', function (e) {
             // Pass the cell element and the event itself to handleDragStart.
             // handleDragStart will call e.preventDefault() internally.
-            handleDragStart(this, e); 
+            handleDragStart(this, e);
         });
     });
 
     // Add event listener for custom 'availabilityChanged' event
     const calendarGridForListener = document.getElementById('calendar-grid');
     if (calendarGridForListener) {
-        calendarGridForListener.addEventListener('availabilityChanged', function(event) {
+        calendarGridForListener.addEventListener('availabilityChanged', function (event) {
             debouncedAutoSave();
         });
     }
@@ -759,11 +759,11 @@ function setupCellInteractions() {
         handleDragMove(e.clientX, e.clientY);
     });
 
-    calendarGrid.addEventListener('touchmove', function(e) {
+    calendarGrid.addEventListener('touchmove', function (e) {
         if (!isMouseDown) return; // isMouseDown is set by handleDragStart
 
         // Prevent scrolling while dragging to select
-        e.preventDefault(); 
+        e.preventDefault();
 
         if (e.touches.length > 0) {
             const touch = e.touches[0];
@@ -772,9 +772,9 @@ function setupCellInteractions() {
     });
 
     document.addEventListener('mouseup', handleDragEnd);
-    document.addEventListener('touchend', function(e) {
+    document.addEventListener('touchend', function (e) {
         // Check if isMouseDown was true, as touchend can fire for various reasons.
-        if (isMouseDown) { 
+        if (isMouseDown) {
             handleDragEnd();
         }
     });
