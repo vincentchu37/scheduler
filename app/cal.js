@@ -276,7 +276,7 @@ $(document).ready(function () {
     }
 
     // Initialize saveButton
-    saveButton = document.getElementById('save-availability');
+    saveButton = document.getElementById('save-state');
     if (saveButton) {
         originalSaveButtonHTML = saveButton.innerHTML; // Store initial HTML
     } else {

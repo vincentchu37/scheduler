@@ -98,93 +98,94 @@ try {
     }
     // --- End of Automatic Cleanup ---
 
-// Function to fetch and calculate aggregate event data
-function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): array {
-    // 1. Get all users for this event (from user_sessions for anyone who has interacted)
-    $usersStmt = $pdo->prepare("SELECT DISTINCT username FROM user_sessions WHERE event_id = ? ORDER BY last_active DESC");
-    $usersStmt->execute([$eventId]);
-    $eventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
-    $totalEventUsers = count($eventUsers);
+    // Function to fetch and calculate aggregate event data
+    function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): array
+    {
+        // 1. Get all users for this event (from user_sessions for anyone who has interacted)
+        $usersStmt = $pdo->prepare("SELECT DISTINCT username FROM user_sessions WHERE event_id = ? ORDER BY last_active DESC");
+        $usersStmt->execute([$eventId]);
+        $eventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
+        $totalEventUsers = count($eventUsers);
 
-    // 2. Get all availability data for the event
-    $allAvailabilityStmt = $pdo->prepare("SELECT username, slot_timestamp FROM availability WHERE event_id = ?");
-    $allAvailabilityStmt->execute([$eventId]);
-    $rawAllAvailability = $allAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC);
-    $allAvailability = []; // Processed into desired format
-    foreach ($rawAllAvailability as $row) {
-        $dt = new DateTime('@' . $row['slot_timestamp'], new DateTimeZone('UTC'));
-        $allAvailability[] = [
-            'username' => $row['username'],
-            'date' => $dt->format('Y-m-d'), // UTC date
-            'hour' => (int)$dt->format('G')  // UTC hour
-        ];
-    }
-
-    // 3. Calculate per-slot availability counts
-    $perSlotAvailabilityCounts = [];
-    foreach ($allAvailability as $record) {
-        $slotKey = $record['date'] . '_' . $record['hour']; // UTC key
-        $perSlotAvailabilityCounts[$slotKey] = ($perSlotAvailabilityCounts[$slotKey] ?? 0) + 1;
-    }
-
-    // 4. Calculate per-slot availability percentages
-    $perSlotAvailabilityPercentages = [];
-    if ($totalEventUsers > 0) {
-        foreach ($perSlotAvailabilityCounts as $slotKey => $count) {
-            $perSlotAvailabilityPercentages[$slotKey] = round(($count / $totalEventUsers) * 100);
+        // 2. Get all availability data for the event
+        $allAvailabilityStmt = $pdo->prepare("SELECT username, slot_timestamp FROM availability WHERE event_id = ?");
+        $allAvailabilityStmt->execute([$eventId]);
+        $rawAllAvailability = $allAvailabilityStmt->fetchAll(PDO::FETCH_ASSOC);
+        $allAvailability = []; // Processed into desired format
+        foreach ($rawAllAvailability as $row) {
+            $dt = new DateTime('@' . $row['slot_timestamp'], new DateTimeZone('UTC'));
+            $allAvailability[] = [
+                'username' => $row['username'],
+                'date' => $dt->format('Y-m-d'), // UTC date
+                'hour' => (int)$dt->format('G')  // UTC hour
+            ];
         }
-    }
-    
-    // 5. Prepare detailed slot user information for tooltips ($slotUserDetails)
-    $slotUserDetails = [];
-    // Note: $eventDetails is the raw event record from the DB
-    if (isset($eventDetails['start_datetime'], $eventDetails['end_datetime'])) {
-        // These are stored as milliseconds in DB, convert to DateTimeImmutable
-        $startDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $eventDetails['start_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
-        $endDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $eventDetails['end_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
 
-        $currentIterDateTime = $startDateTime;
-        while ($currentIterDateTime < $endDateTime) { // Iterate through each hour of the event
-            $dateStr = $currentIterDateTime->format('Y-m-d'); // UTC
-            $hourVal = (int)$currentIterDateTime->format('G'); // UTC
-            $currentSlotKey = $dateStr . '_' . $hourVal;
+        // 3. Calculate per-slot availability counts
+        $perSlotAvailabilityCounts = [];
+        foreach ($allAvailability as $record) {
+            $slotKey = $record['date'] . '_' . $record['hour']; // UTC key
+            $perSlotAvailabilityCounts[$slotKey] = ($perSlotAvailabilityCounts[$slotKey] ?? 0) + 1;
+        }
 
-            $availableForSlot = [];
-            foreach ($allAvailability as $avail) {
-                if ($avail['date'] === $dateStr && (int)$avail['hour'] === $hourVal) {
-                    $availableForSlot[] = $avail['username'];
-                }
+        // 4. Calculate per-slot availability percentages
+        $perSlotAvailabilityPercentages = [];
+        if ($totalEventUsers > 0) {
+            foreach ($perSlotAvailabilityCounts as $slotKey => $count) {
+                $perSlotAvailabilityPercentages[$slotKey] = round(($count / $totalEventUsers) * 100);
             }
-            $availableForSlotUnique = array_values(array_unique($availableForSlot));
+        }
 
-            $unavailableForSlot = [];
-            if(!empty($eventUsers)){ // Only iterate if there are users
-                foreach ($eventUsers as $user) {
-                    if (!in_array($user, $availableForSlotUnique)) {
-                        $unavailableForSlot[] = $user;
+        // 5. Prepare detailed slot user information for tooltips ($slotUserDetails)
+        $slotUserDetails = [];
+        // Note: $eventDetails is the raw event record from the DB
+        if (isset($eventDetails['start_datetime'], $eventDetails['end_datetime'])) {
+            // These are stored as milliseconds in DB, convert to DateTimeImmutable
+            $startDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $eventDetails['start_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
+            $endDateTime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $eventDetails['end_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
+
+            $currentIterDateTime = $startDateTime;
+            while ($currentIterDateTime < $endDateTime) { // Iterate through each hour of the event
+                $dateStr = $currentIterDateTime->format('Y-m-d'); // UTC
+                $hourVal = (int)$currentIterDateTime->format('G'); // UTC
+                $currentSlotKey = $dateStr . '_' . $hourVal;
+
+                $availableForSlot = [];
+                foreach ($allAvailability as $avail) {
+                    if ($avail['date'] === $dateStr && (int)$avail['hour'] === $hourVal) {
+                        $availableForSlot[] = $avail['username'];
                     }
                 }
-            }
-            $slotUserDetails[$currentSlotKey] = [
-                'available' => $availableForSlotUnique,
-                'unavailable' => $unavailableForSlot
-            ];
-            $currentIterDateTime = $currentIterDateTime->add(new DateInterval('PT1H'));
-        }
-    }
+                $availableForSlotUnique = array_values(array_unique($availableForSlot));
 
-    return [
-        'eventUsers' => $eventUsers,
-        'totalEventUsers' => $totalEventUsers,
-        'allAvailability' => $allAvailability,
-        'perSlotAvailabilityCounts' => $perSlotAvailabilityCounts,
-        'perSlotAvailabilityPercentages' => $perSlotAvailabilityPercentages,
-        'slotUserDetails' => $slotUserDetails
-        // 'startDateTime' => $startDateTime, // Optional: if needed by caller directly
-        // 'endDateTime' => $endDateTime     // Optional: if needed by caller directly
-    ];
-}
-// End of getEventAggregateData function
+                $unavailableForSlot = [];
+                if (!empty($eventUsers)) { // Only iterate if there are users
+                    foreach ($eventUsers as $user) {
+                        if (!in_array($user, $availableForSlotUnique)) {
+                            $unavailableForSlot[] = $user;
+                        }
+                    }
+                }
+                $slotUserDetails[$currentSlotKey] = [
+                    'available' => $availableForSlotUnique,
+                    'unavailable' => $unavailableForSlot
+                ];
+                $currentIterDateTime = $currentIterDateTime->add(new DateInterval('PT1H'));
+            }
+        }
+
+        return [
+            'eventUsers' => $eventUsers,
+            'totalEventUsers' => $totalEventUsers,
+            'allAvailability' => $allAvailability,
+            'perSlotAvailabilityCounts' => $perSlotAvailabilityCounts,
+            'perSlotAvailabilityPercentages' => $perSlotAvailabilityPercentages,
+            'slotUserDetails' => $slotUserDetails
+            // 'startDateTime' => $startDateTime, // Optional: if needed by caller directly
+            // 'endDateTime' => $endDateTime     // Optional: if needed by caller directly
+        ];
+    }
+    // End of getEventAggregateData function
 
 
     session_set_cookie_params([
@@ -220,14 +221,13 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
 
             // Call the refactored function
             $aggregateData = getEventAggregateData($pdo, $eventId, $eventFromDb);
-            
+
             echo json_encode([
                 'status' => 'success',
                 'perSlotAvailabilityPercentages' => $aggregateData['perSlotAvailabilityPercentages'],
                 'slotUserDetails' => $aggregateData['slotUserDetails']
             ]);
             exit;
-
         } catch (PDOException $e) {
             error_log("Error fetching aggregate data for event $eventId: " . $e->getMessage());
             http_response_code(500);
@@ -244,7 +244,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
 
     // The check for $_GET['id'] is important for normal operation.
     // It should not conflict with the cleanup logic as cleanup doesn't rely on $_GET['id'] and doesn't echo/exit.
-    if (!isset($_GET['id'])) {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' && !isset($_GET['id'])) {
         header('Location: .#noevent');
         exit;
     }
@@ -348,17 +348,19 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
     $event = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$event) { // Event does not exist (if $_GET['id'] was provided), OR $_GET['id'] was not provided (new event creation path from index.html)
-        
+
         // This block handles new event creation if it's a POST request, typically from index.html
         // (where $_GET['id'] would not be set, thus $event would be initially false).
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_GET['id'])) {
-            
+
             // Check for necessary fields for creation from POST data
-            if (empty($_POST) || 
-                !isset($_POST['uniqueid']) || 
+            if (
+                empty($_POST) ||
+                !isset($_POST['uniqueid']) ||
                 !isset($_POST['event-name']) ||
-                !isset($_POST['start-datetime-utc']) || 
-                !isset($_POST['end-datetime-utc'])) {
+                !isset($_POST['start-datetime-utc']) ||
+                !isset($_POST['end-datetime-utc'])
+            ) {
                 error_log("Event Creation Failed: Missing required POST data. Received: " . print_r($_POST, true));
                 header('Location: .#noevent&error=missing_data');
                 exit;
@@ -380,7 +382,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
 
             // Validate event name
             $eventNameToCreate = trim($_POST['event-name']);
-            if (empty($eventNameToCreate) || strlen($eventNameToCreate) > 255) { 
+            if (empty($eventNameToCreate) || strlen($eventNameToCreate) > 255) {
                 error_log("Event Creation Failed: Invalid event name for id '" . $uniqueIdToCreate . "'. Name: '" . $eventNameToCreate . "' Length: " . strlen($eventNameToCreate));
                 header('Location: .#noevent&error=invalid_name_format');
                 exit;
@@ -396,7 +398,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
                 header('Location: .#noevent&error=invalid_datetime_format');
                 exit;
             }
-            
+
             // Additional check: ensure start_datetime is before end_datetime
             // Timestamps are in milliseconds.
             if ((float)$startDatetimeUtc >= (float)$endDatetimeUtc) {
@@ -404,7 +406,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
                 header('Location: .#noevent&error=invalid_datetime_order');
                 exit;
             }
-            
+
             // If all validations pass, proceed with insertion
             $stmt = $pdo->prepare("INSERT INTO events(event_name, uniqueid, start_datetime, end_datetime) 
                             VALUES(:event_name, :uniqueid, :start_datetime, :end_datetime)");
@@ -422,7 +424,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
                 if ($e->getCode() == 23000) { // SQLSTATE 23000: Integrity constraint violation (e.g., uniqueid already exists)
                     error_log("Event Creation Failed: uniqueid already exists - '" . $uniqueIdToCreate . "'. Error: " . $e->getMessage());
                     // It's possible the client generated an ID that, by chance, already exists.
-                    header('Location: .#noevent&error=event_id_taken'); 
+                    header('Location: .#noevent&error=event_id_taken');
                     exit;
                 } else {
                     error_log("Event Creation Failed: Database error for id '" . $uniqueIdToCreate . "'. Error: " . $e->getMessage());
@@ -435,8 +437,8 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
             // 1. $_GET['id'] was set, but no event with that ID was found by the initial query.
             // 2. It's not a POST request for creation (e.g., a GET request with no ID, or a GET with an ID that wasn't found).
             if (isset($_GET['id'])) {
-                 error_log("Event Not Found: No event with ID '" . $_GET['id'] . "' found via GET.");
-                 header('Location: .#noevent&error=event_not_found_get');
+                error_log("Event Not Found: No event with ID '" . $_GET['id'] . "' found via GET.");
+                header('Location: .#noevent&error=event_not_found_get');
             } else {
                 // Generic case if somehow reached without a GET ID and not a POST for creation.
                 // This might happen if the initial `if (!isset($_GET['id']))` (around L260) was bypassed or conditions change.
@@ -478,7 +480,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
         // To avoid re-creating them, getEventAggregateData could return them, or this logic also moves.
         // For minimal changes here, we re-create them or assume they might be created if Overall Availability % is complex.
         // However, the $allAvailability needed is already processed (UTC date/hour strings).
-        
+
         // Re-derive $startDateTime and $endDateTime for this specific calculation block if not returned by getEventAggregateData
         $startDateTimeForOverall = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $event['start_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
         $endDateTimeForOverall = DateTimeImmutable::createFromFormat('U.u', sprintf('%.3f', $event['end_datetime'] / 1000))->setTimezone(new DateTimeZone('UTC'));
@@ -493,7 +495,7 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
 
         $uniqueAvailableSlotsSet = [];
         // $allAvailability is now the processed one from getEventAggregateData
-        foreach ($allAvailability as $avail) { 
+        foreach ($allAvailability as $avail) {
             $uniqueAvailableSlotsSet[$avail['date'] . '_' . $avail['hour']] = true; // Use keys for uniqueness
         }
         $uniqueAvailableSlots = count($uniqueAvailableSlotsSet);
@@ -502,7 +504,6 @@ function getEventAggregateData(PDO $pdo, string $eventId, array $eventDetails): 
             $overallAvailabilityPercentage = round(($uniqueAvailableSlots / $totalPossibleSlots) * 100);
         }
     }
-
 } catch (PDOException $e) {
     if ($e->getCode() == 23000) {
         echo "Error: This event ID already exists. Try making another event.";
@@ -542,7 +543,7 @@ if ($event) {
             'userAvailability' => $userAvailability,
             'perSlotAvailabilityPercentages' => $perSlotAvailabilityPercentages,
             'slotUserDetails' => $slotUserDetails,
-            'csrfToken' => $csrf_token 
+            'csrfToken' => $csrf_token
         ]) . ';';
         ?>
         // Optional: console.log(window.eventAppData); // For debugging initial data
@@ -568,12 +569,10 @@ if ($event) {
             <a href="."><button type="button" class="btn btn-outline-primary">New Event</button></a>
             <a href="#"><button type="button" id="copy-link" class="btn btn-primary" url-site="">Share event</button>
             </a>
-            <form id="save-availability-form" action="?id=<?php echo htmlspecialchars($event["uniqueid"]); ?>" method="post">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                <input type="hidden" name="form_action" value="save_availability">
+            <a href="#">
                 <span id="selected-slots-container"></span>
-                <button type="submit" id="save-availability" class="btn btn-success">Saved ✔</button>
-            </form>
+                <button id="save-state" class="btn btn-success" disabled>Saved ✔</button>
+            </a>
         </div>
     </div>
     <!-- Calendar Container -->

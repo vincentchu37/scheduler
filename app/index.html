@@ -204,7 +204,7 @@
 
             // Get form element and update action
             const eventForm = document.getElementById('event-form');
-            eventForm.action = "event.php?id=" + uniqueId;
+            eventForm.action = "event.php";
             //auto timezone 
             const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             const select = document.getElementById('timezone');
