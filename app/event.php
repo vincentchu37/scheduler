@@ -3,7 +3,6 @@
 try {
     $pdo = new PDO('sqlite:events.db');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->exec("PRAGMA journal_mode = WAL;");
 
     // Create events table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS events(
@@ -105,7 +104,11 @@ try {
         // 1. Get all users for this event (from user_sessions for anyone who has interacted)
         $usersStmt = $pdo->prepare("SELECT DISTINCT username FROM user_sessions WHERE event_id = ? ORDER BY last_active DESC");
         $usersStmt->execute([$eventId]);
-        $eventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
+        $rawEventUsers = $usersStmt->fetchAll(PDO::FETCH_COLUMN);
+        $eventUsers = [];
+        foreach ($rawEventUsers as $user) {
+            $eventUsers[] = htmlspecialchars($user, ENT_QUOTES, 'UTF-8');
+        }
         $totalEventUsers = count($eventUsers);
 
         // 2. Get all availability data for the event
@@ -116,7 +119,7 @@ try {
         foreach ($rawAllAvailability as $row) {
             $dt = new DateTime('@' . $row['slot_timestamp'], new DateTimeZone('UTC'));
             $allAvailability[] = [
-                'username' => $row['username'],
+                'username' => htmlspecialchars($row['username'], ENT_QUOTES, 'UTF-8'), // Apply sanitization here
                 'date' => $dt->format('Y-m-d'), // UTC date
                 'hour' => (int)$dt->format('G')  // UTC hour
             ];
