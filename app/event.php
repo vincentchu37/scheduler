@@ -3,6 +3,7 @@
 try {
     $pdo = new PDO('sqlite:events.db');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->exec("PRAGMA journal_mode = WAL;");
 
     // Create events table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS events(
