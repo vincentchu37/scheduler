@@ -1,7 +1,7 @@
 <?php
 // Connect to SQLite database
 try {
-    $pdo = new PDO('sqlite:events.db');
+    $pdo = new PDO('sqlite:db/events.db');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec("PRAGMA journal_mode = WAL;");
 
