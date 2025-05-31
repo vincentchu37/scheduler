@@ -10,8 +10,9 @@ https://scheduler.quickbrownfoxes.org/
 
 ![screnshot](image.png)
 
+the `/app/db` folder needs to be writable by 1000:1000 (application user in the container) for sqlite db and WAL files.
+
 ### Docker deployment
-you'll first need to `touch /home/vincent/scheduler/events.db` and `chown 1000:1000 events.db`
 ```
 services:
   scheduler:
@@ -20,7 +21,7 @@ services:
     environment:
       - WEB_DOCUMENT_INDEX=index.html
     volumes:
-      - /home/vincent/scheduler/events.db:/app/events.db
+      - /home/vincent/scheduler/:/app/db
 ```
 
 ### Regular fpm deployment
