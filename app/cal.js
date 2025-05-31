@@ -5,7 +5,11 @@ let saveButton = null;
 let originalSaveButtonHTML = ''; // To store the initial HTML of the save button
 
 let pollingIntervalId = null;
-const POLLING_INTERVAL_MS = 15000; // 15 seconds
+const POLLING_INTERVAL_MS = 10000; // 10 seconds
+
+let saveStateTimerIntervalId = null;
+let nextSaveTimestamp = null;
+let lastSaveSuccessful = null;
 
 // Utility function to pad numbers for date/time formatting
 const pad = n => String(n).padStart(2, '0');
@@ -41,15 +45,18 @@ function initiateAutoSave() {
 
     if (!window.eventAppData || !window.eventAppData.event || !window.eventAppData.event.uniqueid) {
         console.error('Cannot auto-save: event uniqueid not found in window.eventAppData.');
+        lastSaveSuccessful = false;
         saveButton.innerHTML = 'Save Error!';
         saveButton.classList.remove('btn-info', 'btn-success', 'btn-primary');
         saveButton.classList.add('btn-danger');
         setTimeout(() => {
             if (saveButton.innerHTML === 'Save Error!') {
-                saveButton.innerHTML = originalSaveButtonHTML;
-                saveButton.className = 'btn btn-success';
+                nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                startSaveStateTimer();
+                saveButton.classList.remove('btn-info');
+                saveButton.classList.add('btn-danger');  // Keep it red
             }
-        }, 3000);
+        }, 3000); // After 3s of "Save Error!"
         return;
     }
     const currentEventId = window.eventAppData.event.uniqueid;
@@ -57,18 +64,34 @@ function initiateAutoSave() {
 
     if (!currentEventId) {
         console.error('Event ID not found for auto-save (from eventAppData).');
+        lastSaveSuccessful = false;
         saveButton.innerHTML = 'Save Error!';
         saveButton.classList.remove('btn-info');
         saveButton.classList.add('btn-danger');
-        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success'; }, 3000);
+        setTimeout(() => {
+            if (saveButton.innerHTML === 'Save Error!') {
+                nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                startSaveStateTimer();
+                saveButton.classList.remove('btn-info');
+                saveButton.classList.add('btn-danger');  // Keep it red
+            }
+        }, 3000); // After 3s of "Save Error!"
         return;
     }
     if (!csrfToken) {
         console.error('CSRF token not available for auto-save.');
+        lastSaveSuccessful = false;
         saveButton.innerHTML = 'Save Error!';
         saveButton.classList.remove('btn-info');
         saveButton.classList.add('btn-danger');
-        setTimeout(() => { if (saveButton.innerHTML === 'Save Error!') saveButton.innerHTML = originalSaveButtonHTML; saveButton.className = 'btn btn-success'; }, 3000);
+        setTimeout(() => {
+            if (saveButton.innerHTML === 'Save Error!') {
+                nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                startSaveStateTimer();
+                saveButton.classList.remove('btn-info');
+                saveButton.classList.add('btn-danger');  // Keep it red
+            }
+        }, 3000); // After 3s of "Save Error!"
         return;
     }
 
@@ -94,19 +117,23 @@ function initiateAutoSave() {
         })
         .then(result => {
             if (result.status === 'success') {
+                lastSaveSuccessful = true;
                 saveButton.innerHTML = 'Saved ✔';
                 saveButton.classList.remove('btn-info');
                 saveButton.classList.add('btn-success'); // Green for saved
 
-                fetchAndUpdateAggregateData(); // Update aggregate view for active user
+                fetchAndUpdateAggregateDataOnlyLogic(currentEventId); // Update aggregate view for active user
 
                 setTimeout(() => {
                     if (saveButton.innerHTML === 'Saved ✔') {
-                        saveButton.innerHTML = originalSaveButtonHTML;
-                        saveButton.className = 'btn btn-success'; // Revert to original class
+                        nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS; // Reset timer relative to this save action
+                        startSaveStateTimer(); // Display the new countdown
+                        saveButton.classList.remove('btn-info'); // Was 'btn-info' for 'Saving...'
+                        saveButton.classList.add('btn-success'); // Keep it green
                     }
-                }, 2000);
+                }, 2000); // After 2s of "Saved ✔"
             } else {
+                lastSaveSuccessful = false;
                 saveButton.innerHTML = 'Save Failed!';
                 saveButton.classList.remove('btn-info');
                 saveButton.classList.add('btn-danger'); // Red for failed
@@ -114,43 +141,86 @@ function initiateAutoSave() {
                 // alert(`Auto-save failed: ${result.message}`); // Optional: more prominent error
                 setTimeout(() => {
                     if (saveButton.innerHTML === 'Save Failed!') {
-                        saveButton.innerHTML = originalSaveButtonHTML;
-                        saveButton.className = 'btn btn-success';
+                        nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                        startSaveStateTimer();
+                        saveButton.classList.remove('btn-info');
+                        saveButton.classList.add('btn-danger'); // Keep it red
                     }
-                }, 3000);
+                }, 3000); // After 3s of "Save Failed!"
             }
         })
         .catch(error => {
+            lastSaveSuccessful = false;
             saveButton.innerHTML = 'Save Error!';
             saveButton.classList.remove('btn-info');
             saveButton.classList.add('btn-danger');
             console.error('Auto-save request error:', error);
             setTimeout(() => {
                 if (saveButton.innerHTML === 'Save Error!') {
-                    saveButton.innerHTML = originalSaveButtonHTML;
-                    saveButton.className = 'btn btn-success';
+                    nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                    startSaveStateTimer();
+                    saveButton.classList.remove('btn-info');
+                    saveButton.classList.add('btn-danger');  // Keep it red
                 }
-            }, 3000);
+            }, 3000); // After 3s of "Save Error!"
         });
 }
 
 // Create a debounced version of the auto-save function
-const debouncedAutoSave = debounce(initiateAutoSave, 1000); // 1.5 seconds
+const debouncedAutoSave = debounce(initiateAutoSave, 1000); // 1 second
 
 
 // --- Aggregate Data Polling Functions ---
 function startPollingAggregateData() {
-    if (pollingIntervalId) {
-        clearInterval(pollingIntervalId);
-        pollingIntervalId = null;
-    }
+    if (pollingIntervalId) clearInterval(pollingIntervalId); // Clear existing main poll interval
+    clearInterval(saveStateTimerIntervalId); // Clear button timer as we are (re)starting
 
     if (document.hidden) {
-        return;
+        if (saveButton) { // saveButton is a global variable already defined
+            saveButton.innerHTML = 'Auto-Update Paused';
+            saveButton.disabled = true;
+        }
+        return; // Don't start if hidden
     }
 
-    fetchAndUpdateAggregateData(); // Initial fetch when starting/resuming
-    pollingIntervalId = setInterval(fetchAndUpdateAggregateData, POLLING_INTERVAL_MS);
+    const performPollCycle = () => {
+        if (document.hidden) { // Re-check visibility at the start of each cycle
+            stopPollingAggregateData(); // stopPollingAggregateData will handle button text and clear timers
+            return;
+        }
+
+        const currentEventId = window.eventAppData && window.eventAppData.event ? window.eventAppData.event.uniqueid : null;
+        if (!currentEventId) {
+            console.error("Cannot poll: event uniqueid not found in window.eventAppData.");
+            stopPollingAggregateData(); // Stop if essential data is missing
+            if(saveButton) {
+                saveButton.innerHTML = "Error: Event ID Missing";
+                saveButton.disabled = true;
+            }
+            return;
+        }
+
+        if (saveButton) {
+             saveButton.innerHTML = 'Updating...';
+             saveButton.disabled = true;
+        }
+        
+        fetchAndUpdateAggregateDataOnlyLogic(currentEventId)
+            .then(() => {
+                // Fetch was successful.
+            })
+            .catch((error) => {
+                // Fetch failed.
+                console.error("performPollCycle: fetchAndUpdateAggregateDataOnlyLogic failed:", error);
+            })
+            .finally(() => {
+                nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS;
+                startSaveStateTimer(); 
+            });
+    };
+
+    performPollCycle(); 
+    pollingIntervalId = setInterval(performPollCycle, POLLING_INTERVAL_MS);
 }
 
 function stopPollingAggregateData() {
@@ -158,20 +228,26 @@ function stopPollingAggregateData() {
         clearInterval(pollingIntervalId);
         pollingIntervalId = null;
     }
+    clearInterval(saveStateTimerIntervalId); 
+    if (saveButton) { 
+        saveButton.innerHTML = 'Auto-Update Paused';
+        saveButton.disabled = true;
+    }
 }
 // --- End of Aggregate Data Polling Functions ---
 
-
-// Function to fetch and update aggregate availability data
-function fetchAndUpdateAggregateData() {
+function fetchAndUpdateAggregateDataOnlyLogic(currentEventIdToUse) {
     if (!window.eventAppData || !window.eventAppData.event || !window.eventAppData.event.uniqueid) {
         console.error('Cannot fetch aggregate data: event uniqueid not found in window.eventAppData.');
-        return;
+        return Promise.reject('No event uniqueid found for fetchAndUpdateAggregateDataOnlyLogic');
     }
-    const currentEventId = window.eventAppData.event.uniqueid;
-    // The check '!currentEventId' below is somewhat redundant now but harmless.
+    const currentEventId = currentEventIdToUse || window.eventAppData.event.uniqueid;
+    if (!currentEventId) {
+        console.error('Cannot fetch aggregate data: currentEventId is null or undefined.');
+        return Promise.reject('currentEventId is null or undefined for fetchAndUpdateAggregateDataOnlyLogic');
+    }
 
-    fetch(`?id=${currentEventId}&action=get_aggregate_data`)
+    return fetch(`?id=${currentEventId}&action=get_aggregate_data`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error fetching aggregate data! status: ${response.status}`);
@@ -186,8 +262,47 @@ function fetchAndUpdateAggregateData() {
             }
         })
         .catch(error => {
-            console.error('Error during fetchAndUpdateAggregateData:', error);
+            console.error('Error during fetchAndUpdateAggregateDataOnlyLogic:', error);
+            throw error; 
         });
+}
+
+function startSaveStateTimer() {
+    if (!saveButton) return; 
+    clearInterval(saveStateTimerIntervalId); 
+
+    const updateCallback = () => {
+        if (document.hidden) {
+            if (saveButton.innerHTML !== 'Auto-Update Paused') {
+                saveButton.innerHTML = 'Auto-Update Paused';
+                saveButton.disabled = true;
+            }
+            clearInterval(saveStateTimerIntervalId); 
+            return; 
+        }
+
+        const currentRemainingSec = Math.max(0, Math.round((nextSaveTimestamp - Date.now()) / 1000));
+        let statusPrefix = "";
+
+        if (lastSaveSuccessful === true) {
+            statusPrefix = "Saved ✔ ";
+        } else if (lastSaveSuccessful === false) {
+            statusPrefix = "Save Failed! ";
+        } else { 
+            statusPrefix = "Monitoring... ";
+        }
+
+        if (currentRemainingSec <= 0) {
+            clearInterval(saveStateTimerIntervalId); 
+            saveButton.innerHTML = statusPrefix + `(Update pending)`; 
+        } else {
+            saveButton.innerHTML = statusPrefix + `(Next update in ${currentRemainingSec}s)`;
+        }
+        saveButton.disabled = true; 
+    };
+    
+    updateCallback(); 
+    saveStateTimerIntervalId = setInterval(updateCallback, 1000); 
 }
 
 // Function to update the display of aggregate availability (fills and tooltips)
