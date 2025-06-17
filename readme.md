@@ -2,7 +2,7 @@
 
 I wanted a self hosted version of when2meet while making some (imo) ui improvments. 
 
-I totally vibe coded this in like 2 days so run at your own risk. I do have the full power of gitlab's security suite aimed at this and it seems to be alright. 
+**Make all contributions on Gitlab: https://gitlab.com/quickbrownfoxes/scheduler**
 
 Try it here:
 
