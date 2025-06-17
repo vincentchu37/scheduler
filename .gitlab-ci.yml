@@ -27,7 +27,7 @@ include:
 - template: DAST.gitlab-ci.yml
 - template: Jobs/Container-Scanning.gitlab-ci.yml
 variables:
-  GITLAB_ADVANCED_SAST_ENABLED: 'false'
+  GITLAB_ADVANCED_SAST_ENABLED: 'true'
   DAST_WEBSITE: https://scheduler.quickbrownfoxes.org
   DAST_FULL_SCAN_ENABLED: "true" # do a full scan
   DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
