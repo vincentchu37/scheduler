@@ -212,6 +212,29 @@
             <li>Black Box around time block: Means you've marked yourself available for that time block</li>
             <li>Blue or Yellow button that says <b>In Select Mode</b> or <b>In Read-Only Mode</b>: This button is a toggle for mobile users. Use read-only mode to see the availablilty per time block and select mode to select time blocks.</li>
         </ul>
+        <h4>FAQ</h4>
+        <ul>
+            <li><h5>Why would I use this over When2meet?</h5>
+                <ul>
+                    <li>I built this app from the ground up to have a decent mobile UI experience and to be super easy to self-host. It's not perfect but I believe those goals are fulfilled here.</li>
+                </ul>
+            </li>
+            <li><h5>Can I / How do I self-host this?</h5>
+                <ul>
+                    <li>Go to the <a href="https://gitlab.com/quickbrownfoxes/scheduler">repo</a>. Two options: Simply use the docker image: <code>registry.gitlab.com/quickbrownfoxes/scheduler</code> (docker compose file example is in the readme) or you can point your PHP webserver at the files in the <code>app</code> directory.</li>
+                </ul>
+            </li>
+            <li><h5>What data do you store on this site?</h5>
+                <ul>
+                    <li>If you're here you're obviously using my hosted version and wondering what I store and how I use your data. I store the following when you create an event: event name, start date, and end date. When you add availability: your username and available time blocks (as UTC timestamps). Finally, a user session cookie on your browser and my database so you don't have to enter a username repeatedly for the same event. That's it. I don't use your data for any other purpose except running this app. </li>
+                </ul>
+            </li>
+            <li><h5>Do you have any third party services like ads or analytics?</h5>
+                <ul>
+                    <li>No Ads. Cloudflare Analytics is on the site to provide me site related metrics, it promises that it "does not use any client-side state, such as cookies or localStorage, to collect usage metrics. We also don't “fingerprint” individuals via their IP address, User Agent string, or any other data for the purpose of displaying analytics."</li>
+                </ul>
+            </li>
+        </ul>
     </div>
     <div class="text-center mb-3">
         <strong><a href="https://gitlab.com/quickbrownfoxes/scheduler">Source Code</a></strong>
