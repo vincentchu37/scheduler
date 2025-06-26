@@ -1,6 +1,6 @@
-# Event scheduler app
+# Event scheduler
 
-I wanted a self hosted version of when2meet while making some (imo) ui improvments. 
+I wanted a self hosted when2meet alternative while making some (imo) ui improvments. 
 
 **Make all contributions on Gitlab: https://gitlab.com/quickbrownfoxes/scheduler**
 
@@ -9,6 +9,8 @@ Try it here:
 https://scheduler.quickbrownfoxes.org/
 
 ![screnshot](image.png)
+
+## Self Hosting
 
 the `/app/db` folder needs to be writable by 1000:1000 (application user in the container) for sqlite db and WAL files.
 
@@ -25,8 +27,9 @@ services:
 ```
 
 ### Regular fpm deployment
-Permissions required to run this app. 
+Git clone, and deploy run out of the `app` directory. 
 
+Permissions required to run this app. 
 Where `82` is the userid of your fpm process!
 
 ```
