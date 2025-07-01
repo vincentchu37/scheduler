@@ -35,9 +35,9 @@ function initiateAutoSave() {
         originalSaveButtonHTML = saveButton.innerHTML;
     }
 
-    saveButton.innerHTML = 'Saving...';
-    saveButton.classList.remove('btn-success', 'btn-danger', 'btn-primary');
-    saveButton.classList.add('btn-info'); // Blue for saving
+    saveButton.innerHTML = 'Saving, please wait...';
+    //saveButton.classList.remove('btn-success', 'btn-danger', 'btn-primary');
+    //saveButton.classList.add('btn-info'); // Blue for saving
 
     const selectedSlotsContainer = document.getElementById('selected-slots-container');
     const selectedSlotInputs = selectedSlotsContainer.querySelectorAll('input[name="selected_slots[]"]');
@@ -118,14 +118,14 @@ function initiateAutoSave() {
         .then(result => {
             if (result.status === 'success') {
                 lastSaveSuccessful = true;
-                saveButton.innerHTML = 'Saved ✔';
+                saveButton.innerHTML = 'Save Success';
                 saveButton.classList.remove('btn-info');
                 saveButton.classList.add('btn-success'); // Green for saved
 
                 fetchAndUpdateAggregateDataOnlyLogic(currentEventId); // Update aggregate view for active user
 
                 setTimeout(() => {
-                    if (saveButton.innerHTML === 'Saved ✔') {
+                    if (saveButton.innerHTML === 'Save Success') {
                         nextSaveTimestamp = Date.now() + POLLING_INTERVAL_MS; // Reset timer relative to this save action
                         startSaveStateTimer(); // Display the new countdown
                         saveButton.classList.remove('btn-info'); // Was 'btn-info' for 'Saving...'
@@ -201,8 +201,8 @@ function startPollingAggregateData() {
         }
 
         if (saveButton) {
-             saveButton.innerHTML = 'Updating...';
-             saveButton.disabled = true;
+            saveButton.innerHTML = 'Updating...';
+            saveButton.disabled = true;
         }
         
         fetchAndUpdateAggregateDataOnlyLogic(currentEventId)
@@ -296,7 +296,7 @@ function startSaveStateTimer() {
             clearInterval(saveStateTimerIntervalId); 
             saveButton.innerHTML = statusPrefix + `(Update pending)`; 
         } else {
-            saveButton.innerHTML = statusPrefix + `(Next update in ${currentRemainingSec}s)`;
+            saveButton.innerHTML = statusPrefix + `(${currentRemainingSec}s)`;
         }
         saveButton.disabled = true; 
     };
