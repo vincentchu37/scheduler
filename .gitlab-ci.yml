@@ -38,6 +38,7 @@ variables:
   DAST_WEBSITE: https://scheduler.quickbrownfoxes.org
   DAST_FULL_SCAN_ENABLED: "true" # do a full scan
   DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+  DAST_TARGET_PATHS: "/,/event.php?id=8jVnHE2u-02-2026"
 container_scanning:
   variables:
     CS_IMAGE: "registry.gitlab.com/quickbrownfoxes/scheduler:latest"
